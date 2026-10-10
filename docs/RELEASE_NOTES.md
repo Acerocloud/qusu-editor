@@ -1,20 +1,24 @@
-# QUSU Editor 1.0.0
+# QUSU Editor 1.0.1
 
-安装后直接打开编辑器，无需安装 Node.js、启动服务或连接付费 API。包含模块排版、局部文字样式、图片与相册、JSON 项目导入导出，以及复制公众号排版。
+安装后运行 QUSU Editor，程序自动启动本机服务并打开默认浏览器，在浏览器中编辑。无需安装 Node.js、手动启动开发服务器或连接付费 API。包含模块排版、局部文字样式、图片与相册、JSON 项目导入导出，以及复制公众号排版。
 
 ## 下载安装
 
-- Windows（Intel / AMD）：下载 `QUSU-Editor-1.0.0-win-x64.exe`，双击安装。
-- Windows ARM：下载 `QUSU-Editor-1.0.0-win-arm64.exe`。
-- Mac（Apple 芯片）：下载 `QUSU-Editor-1.0.0-mac-arm64.dmg`，打开后将应用拖到 Applications。
-- Mac（Intel）：下载 `QUSU-Editor-1.0.0-mac-x64.dmg`，同样拖到 Applications。
+- Windows（Intel / AMD）：下载 `QUSU-Editor-1.0.1-win-x64.exe`，双击安装。
+- Windows ARM：下载 `QUSU-Editor-1.0.1-win-arm64.exe`。
+- Mac（Apple 芯片）：下载 `QUSU-Editor-1.0.1-mac-arm64.dmg`，打开后将应用拖到 Applications。
+- Mac（Intel）：下载 `QUSU-Editor-1.0.1-mac-x64.dmg`，同样拖到 Applications。
 - macOS 另提供 ZIP 包，解压后将应用放入 Applications。
 
 此版本未做 Windows 代码签名、Apple 签名或公证。Windows 首次打开可能显示 SmartScreen 提示；确认下载自此私有仓库后选择“更多信息 → 仍要运行”。macOS 如阻止打开，请按 Apple 的“系统设置 → 隐私与安全性 → 仍要打开”流程确认。组织管理的设备可能要求管理员批准。若要求无此提示，需要配置对应平台的签名证书。
 
 ## 本地文章
 
-文章及本地图片保存在桌面应用的本机数据目录，不会自动上传 GitHub。桌面版与浏览器版的存储独立；迁移时，在浏览器版点击“保存 JSON”，然后在桌面版导入该文件。重要文章建议定期导出 JSON 备份。
+固定编辑地址为 `http://127.0.0.1:17863/`，服务仅允许本机连接。重复运行程序会重新打开编辑器。关闭浏览器标签页后，服务继续运行；在 Windows 系统托盘或 Mac 菜单栏的 QUSU 图标中选择“打开编辑器”或“退出 QUSU Editor”。退出程序后，浏览器页面需要重新启动程序才能使用。若端口被其他程序占用，会提示错误，不会改用随机地址而丢失原存储入口。
+
+文章及本地图片保存在当前浏览器的 IndexedDB 中，不会自动上传 GitHub。请保持使用同一浏览器和用户配置，不要用无痕模式，也不要清除该地址的站点数据。重启和升级后仍使用相同地址恢复文章。
+
+1.0.0 桌面版、旧开发网页 `127.0.0.1:5173` 与新版的存储独立；升级前在旧版点击“保存 JSON”，然后在新版浏览器中导入该文件。重要文章建议定期导出 JSON 备份。
 
 滚动图片的公众号兼容性仍取决于公众号保存时的处理；上传公众号素材后填回图片 URL，并保存草稿、发送手机预览确认。
 

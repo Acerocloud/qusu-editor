@@ -27,6 +27,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec install-electron
+      - run: pnpm exec playwright install chromium
       - run: pnpm test
       - run: pnpm build
       - run: node scripts/test-desktop.mjs

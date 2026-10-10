@@ -1,52 +1,62 @@
-const { app, BrowserWindow, Menu, net, protocol, session, shell, dialog } = require('electron');
+const { app, Menu, Tray, nativeImage, shell, dialog } = require('electron');
+const http = require('node:http');
+const fs = require('node:fs/promises');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 app.setName('QUSU Editor');
 if (process.env.QUSU_TEST_USER_DATA) app.setPath('userData', process.env.QUSU_TEST_USER_DATA);
-protocol.registerSchemesAsPrivileged([{ scheme: 'qusu', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
-let window;
-function trusted(url) { try { const parsed = new URL(url); return parsed.protocol === 'qusu:' && parsed.host === 'app'; } catch { return false; } }
-function external(url) { try { if (['https:', 'http:', 'mailto:'].includes(new URL(url).protocol)) shell.openExternal(url).catch(() => {}); } catch {} }
-function createWindow() {
-  window = new BrowserWindow({ title: 'QUSU Editor', icon: path.join(__dirname, 'icon.png'), width: 1440, height: 1000, minWidth: 900, minHeight: 650, backgroundColor: '#f3f4f6', show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true } });
-  window.once('ready-to-show', () => { if (!process.env.QUSU_TEST_USER_DATA) window.show(); });
-  window.webContents.setWindowOpenHandler(({ url }) => { external(url); return { action: 'deny' }; });
-  window.webContents.on('will-navigate', (event, url) => { if (!trusted(url)) { event.preventDefault(); external(url); } });
-  window.webContents.on('will-attach-webview', event => event.preventDefault());
-  window.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) dialog.showErrorBox('QUSU Editor 无法打开', `请重新启动应用。错误：${description}`);
+const port = 17863; // Stable origin keeps browser articles across restarts and upgrades.
+const url = `http://127.0.0.1:${port}/`;
+let server;
+let tray;
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+async function openEditor() {
+  // Test the OS boundary without opening the user's real browser.
+  if (process.env.QUSU_TEST_USER_DATA) { app.qusuOpenedURLs ??= []; app.qusuOpenedURLs.push(url); return; }
+  try { await shell.openExternal(url); }
+  catch { dialog.showErrorBox('无法自动打开浏览器', `请在浏览器地址栏打开：${url}`); }
+}
+async function startServer() {
+  const root = path.join(app.getAppPath(), 'dist');
+  server = http.createServer(async (request, response) => {
+    const reply = (status, message) => { response.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' }); response.end(message); };
+    if (request.headers.host !== `127.0.0.1:${port}`) return reply(403, 'Forbidden');
+    if (!['GET', 'HEAD'].includes(request.method)) return reply(405, 'Method not allowed');
+    try {
+      const pathname = decodeURIComponent(new URL(request.url, url).pathname);
+      const target = path.resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
+      const relative = path.relative(root, target);
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return reply(403, 'Forbidden');
+      const content = await fs.readFile(target);
+      response.writeHead(200, { 'Content-Type': mime[path.extname(target)] || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+      response.end(request.method === 'HEAD' ? undefined : content);
+    } catch { reply(404, 'Not found'); }
   });
-  window.on('closed', () => { window = null; });
-  window.loadURL('qusu://app/index.html');
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  app.qusuEditorURL = url;
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
-  app.whenReady().then(() => {
-    const root = path.join(app.getAppPath(), 'dist');
-    protocol.handle('qusu', request => {
-      try {
-        if (!trusted(request.url) || !['GET', 'HEAD'].includes(request.method)) return new Response('Not found', { status: 404 });
-        const pathname = decodeURIComponent(new URL(request.url).pathname);
-        const target = path.resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
-        const relative = path.relative(root, target);
-        if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return new Response('Forbidden', { status: 403 });
-        return net.fetch(pathToFileURL(target).toString()).catch(() => new Response('Not found', { status: 404 }));
-      } catch { return new Response('Not found', { status: 404 }); }
-    });
-    session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => callback(trusted(contents?.getURL() || '') && ['clipboard-sanitized-write', 'clipboard-write'].includes(permission)));
-    session.defaultSession.setPermissionCheckHandler((contents, permission) => trusted(contents?.getURL() || '') && ['clipboard-sanitized-write', 'clipboard-write'].includes(permission));
-    session.defaultSession.on('will-download', (_event, item) => item.setSaveDialogOptions({ defaultPath: path.join(app.getPath('downloads'), item.getFilename()) }));
-    Menu.setApplicationMenu(Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-      { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-      { label: '视图', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
-      { role: 'windowMenu' },
+  app.on('second-instance', () => { if (app.qusuEditorURL) openEditor(); });
+  app.whenReady().then(async () => {
+    await startServer();
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 22, height: 22 }));
+    tray.setToolTip('QUSU Editor — 浏览器编辑器');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: '打开编辑器', click: openEditor },
+      { label: url, enabled: false },
+      { type: 'separator' },
+      { label: '退出 QUSU Editor', click: () => app.quit() },
     ]));
-    createWindow();
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-  }).catch(error => { dialog.showErrorBox('QUSU Editor 启动失败', error.message); app.quit(); });
-  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+    tray.on('click', openEditor);
+    Menu.setApplicationMenu(null);
+    if (process.platform === 'darwin') app.dock.hide();
+    app.on('activate', openEditor);
+    await openEditor();
+  }).catch(error => {
+    const message = error.code === 'EADDRINUSE' ? `本地端口 ${port} 已被其他程序占用，请关闭占用程序后重新启动。` : error.message;
+    dialog.showErrorBox('QUSU Editor 启动失败', message);
+    app.quit();
+  });
+  app.on('before-quit', () => { server?.close(); tray?.destroy(); });
 }

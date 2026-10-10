@@ -97,8 +97,10 @@ try {
   const secondTab = await browser.newPage();
   await secondTab.goto(url);
   await secondTab.getByRole('button', { name: '新建文章', exact: true }).first().click();
+  await expect(secondTab.locator('[data-block-id]')).toHaveCount(0);
   await secondTab.getByLabel('当前文章名称').fill('另一标签页的新文章');
   await secondTab.getByRole('button', { name: '保存当前文章', exact: true }).click();
+  await expect(secondTab.getByText('已自动保存', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '文章', exact: true }).click();
   await page.getByRole('button', { name: '保存当前文章', exact: true }).click();
   await expect(page.getByRole('button', { name: '打开文章：另一标签页的新文章', exact: true })).toBeVisible();

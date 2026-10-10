@@ -3,7 +3,7 @@ import { parseProject } from './project';
 const KEY='qusu-editor-project-v1';
 const WORKSPACE_KEY='qusu-editor-workspace-v1';
 export type EditMode='article'|'template'|'empty';
-export interface Workspace { version:2; activeId:string|null; activeMode:EditMode; articles:Article[]; templates:Article[]; draft:Article|null; deletedArticleIds:string[]; savedAt?:string }
+export interface Workspace { version:2; activeId:string|null; activeMode:EditMode; articles:Article[]; templates:Article[]; draft:Article|null; deletedArticleIds:string[]; deletedTemplateIds:string[]; savedAt?:string }
 let dbPromise:Promise<IDBDatabase>|undefined;
 function database():Promise<IDBDatabase>{
   if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
@@ -24,9 +24,11 @@ export function parseWorkspace(raw:unknown):Workspace {
   const activeMode=legacy?'article':value.activeMode;
   const draft=legacy||!value.draft?null:parseProject(JSON.stringify(value.draft));
   const deletedArticleIds=legacy?[]:value.deletedArticleIds;
+  const deletedTemplateIds=legacy?[]:value.deletedTemplateIds??[];
+  if(!Array.isArray(deletedTemplateIds)||!deletedTemplateIds.every(id=>typeof id==='string'))throw new Error('模板库索引无效');
   if(!Array.isArray(deletedArticleIds)||!deletedArticleIds.every(id=>typeof id==='string')||new Set(articles.map(a=>a.id)).size!==articles.length||new Set(templates.map(a=>a.id)).size!==templates.length||!['article','template','empty'].includes(activeMode))throw new Error('文章库索引无效');
   if(activeMode==='article'&&!articles.some(a=>a.id===value.activeId)||activeMode==='template'&&!templates.some(a=>a.id===value.activeId)&&draft?.id!==value.activeId||activeMode==='empty'&&value.activeId!==null||draft&&draft.id!==value.activeId)throw new Error('当前文档索引无效');
-  return {version:2,activeId:value.activeId,activeMode,articles,templates,draft,deletedArticleIds,savedAt:value.savedAt};
+  return {version:2,activeId:value.activeId,activeMode,articles,templates,draft,deletedArticleIds,deletedTemplateIds,savedAt:value.savedAt};
 }
 export async function readWorkspace():Promise<Workspace|undefined>{
   let value:unknown;
@@ -39,9 +41,16 @@ export async function readWorkspace():Promise<Workspace|undefined>{
 }
 export function mergeLibrary(current:Workspace|undefined,next:Workspace):Workspace{
   const deletedArticleIds=[...new Set([...(current?.deletedArticleIds||[]),...next.deletedArticleIds])];
+  const deletedTemplateIds=[...new Set([...(current?.deletedTemplateIds||[]),...next.deletedTemplateIds])];
   const merge=(previous:Article[],incoming:Article[])=>{const records=new Map(previous.map(a=>[a.id,a]));for(const a of incoming){const old=records.get(a.id);if(!old||a.updatedAt>=old.updatedAt)records.set(a.id,a);}return [...records.values()];};
   const articles=merge(current?.articles||[],next.articles).filter(a=>!deletedArticleIds.includes(a.id));
-  const result={...next,articles,templates:merge(current?.templates||[],next.templates),deletedArticleIds};
+  const templates=merge(current?.templates||[],next.templates).filter(a=>!deletedTemplateIds.includes(a.id));
+  const result={...next,articles,templates,deletedArticleIds,deletedTemplateIds,draft:next.draft&&!deletedTemplateIds.includes(next.draft.id)?next.draft:null};
+  if(result.activeMode==='template'&&result.draft?.id!==result.activeId&&!templates.some(a=>a.id===result.activeId)){
+    const template=[...templates].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+    const article=[...articles].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+    result.activeMode=template?'template':article?'article':'empty';result.activeId=template?.id||article?.id||null;result.draft=null;
+  }
   if(result.activeMode==='article'&&!articles.some(a=>a.id===result.activeId)){
     const article=[...articles].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
     result.activeMode=article?'article':'empty';result.activeId=article?.id||null;

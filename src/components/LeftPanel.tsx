@@ -32,7 +32,7 @@ export function LeftPanel({onClose}:{onClose:()=>void}){
             <small>{a.blocks.length} 个模块 · {new Date(a.updatedAt).toLocaleDateString('zh-CN')}</small>
             <span className="collection-card-hint">{current?(tab==='articles'?'正在编辑':'正在编辑模板'):'点击继续编辑'}</span>
           </button>
-          {tab==='articles'&&<button className="collection-delete" title="删除文章" aria-label={`删除文章：${a.title}`} onClick={e=>{e.stopPropagation();if(window.confirm(`删除文章「${a.title||'未命名文章'}」？此操作无法撤销。`))void state.deleteArticle(a.id);}}><Trash2 size={15}/></button>}
+          <button className="collection-delete" title={tab==='articles'?'删除文章':'删除模板'} aria-label={`${tab==='articles'?'删除文章':'删除模板'}：${a.title}`} onClick={e=>{e.stopPropagation();const kind=tab==='articles'?'文章':'模板';if(window.confirm(`删除${kind}「${a.title||`未命名${kind}`}」？此操作无法撤销。`))void (tab==='articles'?state.deleteArticle(a.id):state.deleteTemplate(a.id));}}><Trash2 size={15}/></button>
         </div>;})}
         {!entries.length&&<p className="collection-empty">{search?'没有找到匹配的内容':tab==='templates'?'还没有模板。点击新建模板开始排版。':'还没有文章。点击上方新建文章。'}</p>}
       </div>

@@ -1,4 +1,6 @@
-# QUSU Editor 1.3.0 — 轻量浏览器版
+# QUSU Editor 1.3.1 — 模板删除
+
+模板列表右侧新增「删除模板」垃圾桶，点击后确认，不会触发模板切换。删除当前模板时打开另一份模板；没有模板时返回已有文章，没有文章则显示空状态。模板草稿也可删除。删除结果持久化，旧标签页不会复活已删除模板；已有文章及其图片不受影响。保存失败时保留内容并提示错误。
 
 安装后运行 QUSU Editor，程序自动启动本机服务并打开默认浏览器，在浏览器中编辑。无需安装 Node.js、手动启动开发服务器或连接付费 API。包含模块排版、局部文字样式、图片与相册、JSON 项目导入导出，以及复制公众号排版。
 
@@ -26,10 +28,10 @@
 
 ## 下载安装
 
-- Windows（Intel / AMD）：下载 `QUSU-Editor-1.3.0-win-x64.exe`，双击安装。
-- Windows ARM：下载 `QUSU-Editor-1.3.0-win-arm64.exe`。
-- Mac（Apple 芯片）：下载 `QUSU-Editor-1.3.0-mac-arm64.dmg`，打开后将应用拖到 Applications。
-- Mac（Intel）：下载 `QUSU-Editor-1.3.0-mac-x64.dmg`，同样拖到 Applications。
+- Windows（Intel / AMD）：下载 `QUSU-Editor-1.3.1-win-x64.exe`，双击安装。
+- Windows ARM：下载 `QUSU-Editor-1.3.1-win-arm64.exe`。
+- Mac（Apple 芯片）：下载 `QUSU-Editor-1.3.1-mac-arm64.dmg`，打开后将应用拖到 Applications。
+- Mac（Intel）：下载 `QUSU-Editor-1.3.1-mac-x64.dmg`，同样拖到 Applications。
 - macOS 另提供 ZIP 包，解压后将应用放入 Applications。
 
 系统要求：Windows 10 / 11（64 位），macOS 12 或更新版本。

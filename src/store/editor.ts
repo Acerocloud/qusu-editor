@@ -10,9 +10,9 @@ let validCache=false;
 function load():Article { try { const data=localStorage.getItem(KEY);if(data){const a=parseProject(data);validCache=true;return a;}return newArticle(); } catch {loadError='本地记录无法恢复，已打开示范文章。原记录保留，首次修改前请导出备份。';return newArticle();} }
 export interface EditorState {
   article:Article; selected:string|null; past:Article[]; future:Article[]; saved:'saved'|'saving'|'error'; error:string; hydrated:boolean;
-  articles:Article[]; templates:Article[]; libraryBusy:boolean; activeMode:EditMode; templateDirty:boolean; deletedArticleIds:string[];
+  articles:Article[]; templates:Article[]; libraryBusy:boolean; activeMode:EditMode; templateDirty:boolean; deletedArticleIds:string[]; deletedTemplateIds:string[];
   saveArticle:()=>Promise<void>; createArticle:()=>Promise<void>; openArticle:(id:string)=>Promise<void>; deleteArticle:(id:string)=>Promise<void>;
-  saveTemplate:()=>Promise<void>; createTemplate:()=>Promise<void>; articleToTemplate:(name:string)=>Promise<void>; openTemplate:(id:string)=>Promise<void>; useTemplate:()=>Promise<void>;
+  saveTemplate:()=>Promise<void>; createTemplate:()=>Promise<void>; articleToTemplate:(name:string)=>Promise<void>; openTemplate:(id:string)=>Promise<void>; useTemplate:()=>Promise<void>; deleteTemplate:(id:string)=>Promise<void>;
   select:(id:string|null)=>void; commit:(a:Article,key?:string)=>void;
   insert:(type:BlockType,index?:number)=>void; remove:(id:string)=>void; duplicate:(id:string)=>void; move:(id:string,index:number)=>void;
   content:<K extends BlockType>(id:string,type:K,patch:Partial<ContentMap[K]>,discrete?:boolean)=>void;
@@ -21,7 +21,7 @@ export interface EditorState {
 }
 let lastKey='';let lastTime=0;
 export const useEditorStore=create<EditorState>((set,get)=>({
-  article:load(),articles:[],templates:[],libraryBusy:false,activeMode:'article',templateDirty:false,deletedArticleIds:[],selected:null,past:[],future:[],saved:'saved',error:loadError,hydrated:false,
+  article:load(),articles:[],templates:[],libraryBusy:false,activeMode:'article',templateDirty:false,deletedArticleIds:[],deletedTemplateIds:[],selected:null,past:[],future:[],saved:'saved',error:loadError,hydrated:false,
   saveArticle:()=>persist(),
   createArticle:()=>transition('article',newArticle(true)),
   openArticle:id=>{const a=get().articles.find(a=>a.id===id);return a&&(get().activeMode!=='article'||a.id!==get().article.id)?transition('article',a):Promise.resolve();},
@@ -31,6 +31,7 @@ export const useEditorStore=create<EditorState>((set,get)=>({
   openTemplate:id=>{const a=get().templates.find(a=>a.id===id);return a&&(get().activeMode!=='template'||a.id!==get().article.id)?transition('template',a):Promise.resolve();},
   useTemplate:()=>get().activeMode==='template'?transition('article',cloneArticle(get().article,`${get().article.title} · 新文章`)):Promise.resolve(),
   deleteArticle:id=>transition(undefined,undefined,false,id),
+  deleteTemplate:id=>transition(undefined,undefined,false,id,'template'),
   select:selected=>set({selected}),
   commit:(article,key)=>{
     const state=get();if(state.libraryBusy||state.activeMode==='empty')return;if(JSON.stringify(state.article)===JSON.stringify(article))return;
@@ -63,30 +64,35 @@ function workspace(state:EditorState,finalizeTemplate=false):Workspace{
     if(state.templateDirty&&!finalizeTemplate)draft=state.article;
     else templates=upsert(templates,state.article);
   }
-  return {version:2,activeMode:state.activeMode,activeId:state.activeMode==='empty'?null:state.article.id,articles,templates,draft,deletedArticleIds:state.deletedArticleIds};
+  return {version:2,activeMode:state.activeMode,activeId:state.activeMode==='empty'?null:state.article.id,articles,templates,draft,deletedArticleIds:state.deletedArticleIds,deletedTemplateIds:state.deletedTemplateIds};
 }
 function cloneArticle(source:Article,title:string):Article{const now=new Date().toISOString();return {...structuredClone(source),id:nanoid(),title,createdAt:now,updatedAt:now,blocks:source.blocks.map(b=>({...structuredClone(b),id:nanoid(),...('images' in b.content?{content:{...structuredClone(b.content),images:b.content.images.map(i=>({...i,id:nanoid()}))}}:{})})) as Block[]};}
 function applyWorkspace(data:Workspace,restoreHistory=false){
   const article=data.activeMode==='empty'?emptyArticle:data.draft||(data.activeMode==='template'?data.templates:data.articles).find(a=>a.id===data.activeId)!;
   const history=histories.get(historyKey(data.activeMode,article))||{past:[],future:[],selected:null};
   applying=true;
-  useEditorStore.setState({article,activeMode:data.activeMode,articles:data.articles,templates:data.templates,deletedArticleIds:data.deletedArticleIds,templateDirty:!!data.draft,libraryBusy:false,saved:data.draft?'saving':'saved',error:'',...(restoreHistory?history:{})});
+  useEditorStore.setState({article,activeMode:data.activeMode,articles:data.articles,templates:data.templates,deletedArticleIds:data.deletedArticleIds,deletedTemplateIds:data.deletedTemplateIds,templateDirty:!!data.draft,libraryBusy:false,saved:data.draft?'saving':'saved',error:'',...(restoreHistory?history:{})});
   applying=false;
 }
 async function persist(){
   const state=useEditorStore.getState();if(state.libraryBusy)return;
   clearTimeout(saveTimer);useEditorStore.setState({libraryBusy:true});
-  try{const stored=await writeWorkspace(workspace(state,true));applyWorkspace(stored);}
+  try{const stored=await writeWorkspace(workspace(state,true));applyWorkspace(stored,stored.activeMode!==state.activeMode||stored.activeId!==state.article.id);}
   catch{useEditorStore.setState({libraryBusy:false,saved:'error',error:'本地保存失败，当前内容已保留。请导出 JSON 备份后重试。'});}
 }
-async function transition(mode?:EditMode,article?:Article,isDraft=false,deleteId?:string){
+async function transition(mode?:EditMode,article?:Article,isDraft=false,deleteId?:string,deleteMode:'article'|'template'='article'){
   const state=useEditorStore.getState();if(state.libraryBusy)return;
-  if(deleteId&&!state.articles.some(a=>a.id===deleteId))return;
+  if(deleteId&&!(deleteMode==='article'?state.articles:state.templates).some(a=>a.id===deleteId)&&!(state.activeMode===deleteMode&&state.article.id===deleteId))return;
   clearTimeout(saveTimer);useEditorStore.setState({libraryBusy:true});
   const data=workspace(state,true);
   if(deleteId){
-    data.deletedArticleIds=[...new Set([...data.deletedArticleIds,deleteId])];data.articles=data.articles.filter(a=>a.id!==deleteId);
-    if(state.activeMode==='article'&&state.article.id===deleteId){const next=[...data.articles].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];mode=next?'article':'empty';article=next;}
+    if(deleteMode==='article'){data.deletedArticleIds=[...new Set([...data.deletedArticleIds,deleteId])];data.articles=data.articles.filter(a=>a.id!==deleteId);}
+    else{data.deletedTemplateIds=[...new Set([...data.deletedTemplateIds,deleteId])];data.templates=data.templates.filter(a=>a.id!==deleteId);}
+    if(state.activeMode===deleteMode&&state.article.id===deleteId){
+      const next=[...(deleteMode==='template'?data.templates:data.articles)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+      const fallback=deleteMode==='template'?[...data.articles].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]:undefined;
+      mode=next?deleteMode:fallback?'article':'empty';article=next||fallback;
+    }
   }
   if(mode){data.activeMode=mode;data.activeId=article?.id||null;data.draft=null;
     if(mode==='article'&&article)data.articles=upsert(data.articles,article);
@@ -95,7 +101,7 @@ async function transition(mode?:EditMode,article?:Article,isDraft=false,deleteId
   try{
     const stored=await writeWorkspace(data);
     histories.set(historyKey(state.activeMode,state.article),{past:state.past,future:state.future,selected:state.selected});
-    if(deleteId)histories.delete(`article:${deleteId}`);
+    if(deleteId)histories.delete(`${deleteMode}:${deleteId}`);
     lastKey='';applyWorkspace(stored,!!mode);
   }catch{useEditorStore.setState({libraryBusy:false,saved:'error',error:'本地保存失败，未切换或删除文档，当前内容已保留。请导出 JSON 备份后重试。'});}
 }
@@ -105,7 +111,7 @@ async function autosave(){
     const stored=await writeWorkspace(workspace(state));
     if(useEditorStore.getState().article===state.article&&!useEditorStore.getState().libraryBusy){
       if(stored.activeMode!==state.activeMode||stored.activeId!==state.article.id)applyWorkspace(stored,true);
-      else useEditorStore.setState({articles:stored.articles,templates:stored.templates,deletedArticleIds:stored.deletedArticleIds,saved:state.activeMode==='template'&&state.templateDirty?'saving':'saved',error:''});
+      else useEditorStore.setState({articles:stored.articles,templates:stored.templates,deletedArticleIds:stored.deletedArticleIds,deletedTemplateIds:stored.deletedTemplateIds,saved:state.activeMode==='template'&&state.templateDirty?'saving':'saved',error:''});
     }
   }catch{useEditorStore.setState({saved:'error',error:'本地保存失败，当前内容已保留。请导出 JSON 备份后重试。'});}
 }

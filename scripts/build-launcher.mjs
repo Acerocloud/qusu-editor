@@ -26,6 +26,7 @@ await rm(webRoot, { recursive: true, force: true });
 await mkdir(webRoot, { recursive: true });
 await cp('dist', 'launcher/web', { recursive: true });
 await cp('desktop/icon.png', 'launcher/icon.png');
+run(go, ['mod', 'download'], { cwd: path.join(root, 'launcher') });
 if (windows) run(go, ['run', './cmd/icon', '../desktop/icon.png', 'icon.ico'], { cwd: path.join(root, 'launcher') });
 for (const arch of architectures) {
   if (!['x64', 'arm64'].includes(arch)) throw new Error(`Unsupported architecture: ${arch}`);
@@ -35,7 +36,7 @@ for (const arch of architectures) {
   const flags = `-s -w -X main.version=${version}${windows ? ' -H=windowsgui' : ''}`;
   const env = { ...process.env, GOARCH: arch === 'x64' ? 'amd64' : 'arm64', CGO_ENABLED: windows ? '0' : '1' };
   if (!windows) {
-    env.CGO_CFLAGS = `-arch ${arch === 'x64' ? 'x86_64' : 'arm64'} -mmacosx-version-min=11.0`;
+    env.CGO_CFLAGS = `-arch ${arch === 'x64' ? 'x86_64' : 'arm64'} -mmacosx-version-min=12.0`;
     env.CGO_LDFLAGS = env.CGO_CFLAGS;
   }
   run(go, ['build', '-trimpath', '-ldflags', flags, '-o', executable, '.'], { cwd: path.join(root, 'launcher'), env });
@@ -69,7 +70,7 @@ for (const arch of architectures) {
 <key>CFBundleIconFile</key><string>icon.icns</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
-<key>LSMinimumSystemVersion</key><string>11.0</string>
+<key>LSMinimumSystemVersion</key><string>12.0</string>
 </dict></plist>`);
     const iconset = path.join(root, 'release', `icon-${arch}.iconset`);
     await mkdir(iconset, { recursive: true });

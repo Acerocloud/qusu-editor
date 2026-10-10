@@ -32,6 +32,8 @@
 - Mac（Intel）：下载 `QUSU-Editor-1.3.0-mac-x64.dmg`，同样拖到 Applications。
 - macOS 另提供 ZIP 包，解压后将应用放入 Applications。
 
+系统要求：Windows 10 / 11（64 位），macOS 12 或更新版本。
+
 此版本未做 Windows 代码签名、Apple 签名或公证。Windows 首次打开可能显示 SmartScreen 提示；确认下载自本项目 Release 后选择“更多信息 → 仍要运行”。macOS 如阻止打开，请按 Apple 的“系统设置 → 隐私与安全性 → 仍要打开”流程确认。组织管理的设备可能要求管理员批准。若要求无此提示，需要配置对应平台的签名证书。
 
 ## 本地文章

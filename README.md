@@ -8,7 +8,7 @@
 
 1.3.0 起使用 Go 原生托盘启动器，将前端页面嵌入程序，不再携带 Electron、Chromium 或 Node.js。编辑地址保持不变，1.0.1–1.2.0 浏览器版文章、模板和本地图片继续保留。Windows 安装器复用旧版安装记录并调用旧版卸载器清理 Electron 文件；安装前请从托盘退出旧程序。macOS 用新版应用替换 Applications 内的旧应用。
 
-开发者需要 Go 1.27.2、Node.js 和 pnpm；Windows 打包另需 NSIS 3.11，macOS 打包使用 Xcode Command Line Tools。`pnpm desktop` 构建并启动原生托盘程序；`pnpm dist:win` / `pnpm dist:mac` 在对应平台打包两种架构。可通过 `QUSU_GO` / `QUSU_MAKENSIS` 指定编译器。推送 `v*` 标签后，GitHub Actions 自动构建 Windows x64 / ARM64、macOS Intel / Apple 芯片安装包，验证本机服务、浏览器编辑、Windows 安装升级和旧 Electron 清理后发布 Release。Chromium 仅用于开发测试，不会进入安装包。
+开发者需要 Go 1.26.9、Node.js 和 pnpm；Windows 打包另需 NSIS 3.11，macOS 打包使用 Xcode Command Line Tools。`pnpm desktop` 构建并启动原生托盘程序；`pnpm dist:win` / `pnpm dist:mac` 在对应平台打包两种架构。可通过 `QUSU_GO` / `QUSU_MAKENSIS` 指定编译器。推送 `v*` 标签后，GitHub Actions 自动构建 Windows x64 / ARM64、macOS Intel / Apple 芯片安装包，验证本机服务、浏览器编辑、Windows 安装升级和旧 Electron 清理后发布 Release。Chromium 仅用于开发测试，不会进入安装包。
 
 需要 Node.js 20.19+ 或 22.12+（建议当前 LTS）。
 

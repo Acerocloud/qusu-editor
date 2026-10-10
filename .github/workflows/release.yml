@@ -1,4 +1,4 @@
-name: Desktop Release
+name: Lightweight Desktop Release
 on:
   push:
     tags: ['v*']
@@ -13,8 +13,16 @@ jobs:
         include:
           - os: windows-latest
             platform: win
+            arch: x64
+            build_arches: x64,arm64
           - os: macos-latest
             platform: mac
+            arch: arm64
+            build_arches: arm64
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+            build_arches: x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -25,28 +33,31 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.2'
+          cache-dependency-path: launcher/go.sum
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: choco install nsis -y --no-progress
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec install-electron
       - run: pnpm exec playwright install chromium
       - run: pnpm test
       - run: pnpm build
-      - run: node scripts/test-desktop.mjs
-      - run: pnpm exec electron-builder --${{ matrix.platform }} --x64 --arm64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Verify packaged Windows app
+      - name: Build native browser launchers and installers
+        run: node scripts/build-launcher.mjs --arch ${{ matrix.build_arches }} --package
+      - name: Test native server boundaries
+        working-directory: launcher
+        run: go test ./...
+      - name: Test real packaged launcher and editor
+        run: node scripts/test-desktop.mjs
+      - name: Verify Windows installation and Electron upgrade cleanup
         if: runner.os == 'Windows'
-        run: node scripts/test-desktop.mjs
-        env:
-          QUSU_TEST_EXECUTABLE: '${{ github.workspace }}\release\win-unpacked\QUSU Editor.exe'
-      - name: Verify packaged macOS app
-        if: runner.os == 'macOS'
-        run: node scripts/test-desktop.mjs
-        env:
-          QUSU_TEST_EXECUTABLE: '${{ github.workspace }}/release/mac-arm64/QUSU Editor.app/Contents/MacOS/QUSU Editor'
+        shell: pwsh
+        run: ./scripts/test-windows-install.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: installers-${{ matrix.platform }}
+          name: installers-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             release/*.exe
             release/*.dmg

@@ -7,3 +7,6 @@ playwright-report/
 .env.*
 !.env.example
 release/
+launcher/web/
+launcher/icon.png
+launcher/icon.ico

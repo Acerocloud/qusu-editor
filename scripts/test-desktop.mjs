@@ -1,4 +1,5 @@
-import { _electron, chromium, expect } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
+import { spawn } from 'node:child_process';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,16 +13,43 @@ const port = reservation.address().port;
 await new Promise(resolve => reservation.close(resolve));
 const url = `http://127.0.0.1:${port}/`;
 const env = { ...process.env, QUSU_TEST_USER_DATA: userData, QUSU_TEST_PORT: String(port) };
-delete env.ELECTRON_RUN_AS_NODE;
-const executablePath = process.env.QUSU_TEST_EXECUTABLE;
-const launch = () => _electron.launch({ ...(executablePath ? { executablePath, args: [] } : { args: ['.'] }), env });
+const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+const executablePath = process.env.QUSU_TEST_EXECUTABLE || path.resolve('release', process.platform === 'win32' ? `win-${arch}/QUSU Editor.exe` : `mac-${arch}/QUSU Editor.app/Contents/MacOS/QUSU Editor`);
+const records = async name => (await readFile(path.join(userData, name), 'utf8').catch(() => '')).trim().split('\n').filter(Boolean);
+const start = () => {
+  const child = spawn(executablePath, [], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  let stderr = '';
+  child.stderr.on('data', data => { stderr += data; });
+  const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code)); });
+  return { child, exited, async close() {
+    child.stdin.write('quit\n');
+    try { await expect.poll(() => child.exitCode, { timeout: 10000 }).not.toBeNull(); }
+    finally { if (child.exitCode === null) child.kill(); }
+    expect(await exited, stderr).toBe(0);
+  } };
+};
+const launch = async () => {
+  const readyCount = (await records('tray-ready.txt')).length;
+  const instance = start();
+  await expect.poll(async () => {
+    if (instance.child.exitCode !== null) throw new Error(`Launcher exited ${instance.child.exitCode}: ${await records('error.txt')}`);
+    return (await records('tray-ready.txt')).length;
+  }, { timeout: 15000 }).toBe(readyCount + 1);
+  await expect.poll(async () => (await fetch(url+'.qusu-launcher').then(r=>r.json()).catch(()=>({}))).id).toBe('com.qusu.editor');
+  return instance;
+};
 let desktop;
 let browser;
 try {
-  desktop = await launch();
-  await expect.poll(() => desktop.evaluate(({ app }) => app.qusuEditorURL)).toBe(url);
-  expect(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(0);
-  await expect.poll(() => desktop.evaluate(({ app }) => app.qusuOpenedURLs)).toEqual([url]);
+  if (process.env.QUSU_TEST_LEGACY_EXECUTABLE) {
+    const child = spawn(process.env.QUSU_TEST_LEGACY_EXECUTABLE, [], { env, stdio: 'ignore', windowsHide: true });
+    const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
+    desktop = { child, async close() { child.kill(); await exited; } };
+    await expect.poll(async () => fetch(url).then(r => r.status).catch(() => 0), { timeout: 15000 }).toBe(200);
+  } else {
+    desktop = await launch();
+    await expect.poll(() => records('opened-urls.txt')).toEqual([url]);
+  }
   browser = await chromium.launchPersistentContext(path.join(userData, 'browser'), { headless: true, permissions: ['clipboard-read', 'clipboard-write'] });
   let page = await browser.newPage();
   const errors = [];
@@ -55,12 +83,17 @@ try {
   expect(errors).toEqual([]);
   await browser.close(); browser = null;
   await desktop.close(); desktop = await launch();
-  await expect.poll(() => desktop.evaluate(({ app }) => app.qusuEditorURL)).toBe(url);
+  const openedCount = (await records('opened-urls.txt')).length;
+  const second = start();
+  expect(await second.exited).toBe(0);
+  await expect.poll(async () => (await records('opened-urls.txt')).length).toBe(openedCount + 1);
+  expect(desktop.child.exitCode).toBeNull();
   browser = await chromium.launchPersistentContext(path.join(userData, 'browser'), { headless: true });
   page = await browser.newPage();
   await page.goto(url);
   await expect(page.getByLabel('文章主标题', { exact: true })).toHaveValue('浏览器安装版持久化验证');
   await expect(page.locator('[data-block-type=image] img')).toHaveAttribute('src', /^data:image/);
+  if (process.env.QUSU_TEST_LEGACY_EXECUTABLE) console.log('Electron-to-native upgrade preserved article and local image at the same browser origin.');
   const articleCount = () => page.locator('[aria-label^="打开文章："]');
   const templateCount = () => page.locator('[aria-label^="打开模板："]');
   const articleTab = () => page.getByRole('tab', { name: '文章', exact: true }).click();
@@ -288,4 +321,13 @@ try {
   await articleTab();await expect(articleCount()).toHaveCount(1);
   expect(errors).toEqual([]);
   console.log('Browser smoke passed: template editing/drafts/history, explicit article creation, images, deletion/tombstones, empty state, failure protection, fallback storage, v1 migration and sidebar.');
+  await desktop.close(); desktop = null;
+  const occupied = http.createServer((request, response) => { response.end('Not QUSU'); });
+  await new Promise(resolve => occupied.listen(port, '127.0.0.1', resolve));
+  try {
+    const conflict = start();
+    expect(await conflict.exited).toBe(1);
+    expect((await records('error.txt')).join('')).toContain('已被占用');
+  } finally { await new Promise(resolve => occupied.close(resolve)); }
+  console.log('Native launcher smoke passed: tray initialization, browser launch boundary, single instance, server shutdown, occupied-port protection and browser persistence.');
 } finally { if (browser) await browser.close(); if (desktop) await desktop.close(); }

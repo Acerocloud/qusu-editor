@@ -1,6 +1,16 @@
-# QUSU Editor 1.2.0
+# QUSU Editor 1.3.0 — 轻量浏览器版
 
 安装后运行 QUSU Editor，程序自动启动本机服务并打开默认浏览器，在浏览器中编辑。无需安装 Node.js、手动启动开发服务器或连接付费 API。包含模块排版、局部文字样式、图片与相册、JSON 项目导入导出，以及复制公众号排版。
+
+## 安装包精简
+
+- 将 Electron 替换为 Go 原生托盘启动器，不再打包 Chromium 浏览器或 Node.js。前端页面嵌入程序，安装后可离线编辑。
+- 保留自动打开默认浏览器、托盘 / 菜单栏打开与退出、重复启动复用服务、可收起左栏和固定展开按钮。
+- 编辑地址仍为 `http://127.0.0.1:17863/`。继续使用同一浏览器和用户配置，1.0.1–1.2.0 的文章、模板及本地图片无需迁移。
+- Windows 安装器沿用旧版安装记录，先调用注册的旧版卸载器清理 Electron 文件，再安装轻量程序。重复安装不会叠加运行环境。macOS 替换 Applications 内的旧应用即可。
+- 升级前先从托盘退出旧程序；安装新版后启动，并刷新已打开的编辑器页面。若端口被其他程序占用，会显示提示并停止，不改变地址。
+
+测试覆盖原生托盘初始化、浏览器启动、单实例、服务关闭和重启、文章和模板持久化、保存失败，以及 Windows 从 1.2.0 升级时的旧文件清理。原有排版功能继续保留。
 
 ## 文章删除与独立模板编辑
 
@@ -16,10 +26,10 @@
 
 ## 下载安装
 
-- Windows（Intel / AMD）：下载 `QUSU-Editor-1.2.0-win-x64.exe`，双击安装。
-- Windows ARM：下载 `QUSU-Editor-1.2.0-win-arm64.exe`。
-- Mac（Apple 芯片）：下载 `QUSU-Editor-1.2.0-mac-arm64.dmg`，打开后将应用拖到 Applications。
-- Mac（Intel）：下载 `QUSU-Editor-1.2.0-mac-x64.dmg`，同样拖到 Applications。
+- Windows（Intel / AMD）：下载 `QUSU-Editor-1.3.0-win-x64.exe`，双击安装。
+- Windows ARM：下载 `QUSU-Editor-1.3.0-win-arm64.exe`。
+- Mac（Apple 芯片）：下载 `QUSU-Editor-1.3.0-mac-arm64.dmg`，打开后将应用拖到 Applications。
+- Mac（Intel）：下载 `QUSU-Editor-1.3.0-mac-x64.dmg`，同样拖到 Applications。
 - macOS 另提供 ZIP 包，解压后将应用放入 Applications。
 
 此版本未做 Windows 代码签名、Apple 签名或公证。Windows 首次打开可能显示 SmartScreen 提示；确认下载自本项目 Release 后选择“更多信息 → 仍要运行”。macOS 如阻止打开，请按 Apple 的“系统设置 → 隐私与安全性 → 仍要打开”流程确认。组织管理的设备可能要求管理员批准。若要求无此提示，需要配置对应平台的签名证书。

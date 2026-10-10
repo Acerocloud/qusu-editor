@@ -6,7 +6,9 @@
 
 普通用户可从 [GitHub Releases](https://github.com/Acerocloud/qusu-editor/releases) 下载 Windows EXE 或 macOS DMG 安装包，无需 Node.js。运行程序会自动打开默认浏览器，在 `http://127.0.0.1:17863/` 编辑，文章保存到当前浏览器本机存储。程序在托盘或菜单栏常驻，可重新打开页面或退出。不同平台的下载选择、签名提示和旧文章迁移见 [安装说明](docs/RELEASE_NOTES.md)。
 
-开发者可执行 `pnpm desktop` 启动桌面版；`pnpm dist:win` / `pnpm dist:mac` 在对应平台打包。推送 `v*` 标签后，GitHub Actions 自动构建 Windows x64 / ARM64、macOS Intel / Apple 芯片安装包，全部构建成功才发布 Release。
+1.3.0 起使用 Go 原生托盘启动器，将前端页面嵌入程序，不再携带 Electron、Chromium 或 Node.js。编辑地址保持不变，1.0.1–1.2.0 浏览器版文章、模板和本地图片继续保留。Windows 安装器复用旧版安装记录并调用旧版卸载器清理 Electron 文件；安装前请从托盘退出旧程序。macOS 用新版应用替换 Applications 内的旧应用。
+
+开发者需要 Go 1.27.2、Node.js 和 pnpm；Windows 打包另需 NSIS 3.11，macOS 打包使用 Xcode Command Line Tools。`pnpm desktop` 构建并启动原生托盘程序；`pnpm dist:win` / `pnpm dist:mac` 在对应平台打包两种架构。可通过 `QUSU_GO` / `QUSU_MAKENSIS` 指定编译器。推送 `v*` 标签后，GitHub Actions 自动构建 Windows x64 / ARM64、macOS Intel / Apple 芯片安装包，验证本机服务、浏览器编辑、Windows 安装升级和旧 Electron 清理后发布 Release。Chromium 仅用于开发测试，不会进入安装包。
 
 需要 Node.js 20.19+ 或 22.12+（建议当前 LTS）。
 
@@ -80,7 +82,7 @@ Windows 可双击 `启动编辑器.cmd`。启动器优先使用系统 Node，再
 
 ## 验证
 
-`npm test`：15 项核心测试覆盖模块导出、文本转义、富文本清理、资源 URL、JSON / 可编辑 HTML 往返、错误 schema、重复 ID、外部 HTML 转换及历史操作。
+`npm test`：20 项核心测试覆盖模块导出、文本转义、富文本清理、资源 URL、JSON / 可编辑 HTML 往返、错误 schema、重复 ID、外部 HTML 转换、历史操作、工作空间迁移及删除持久化。构建原生启动器后运行 `pnpm test:desktop`，检查实际托盘初始化、浏览器启动、单实例、服务边界、关闭与重启、文章和模板管理、图片、保存失败和旧数据恢复；`cd launcher && go test ./...` 检查 HTTP 服务边界及实例识别。
 
 端到端测试默认使用 Windows 已安装的 Edge，先启动开发服务器，然后：
 

@@ -1,0 +1,32 @@
+appId: com.qusu.editor
+productName: QUSU Editor
+asar: true
+directories:
+  output: release
+files:
+  - dist/**/*
+  - desktop/main.cjs
+  - desktop/icon.png
+  - package.json
+artifactName: QUSU-Editor-${version}-${os}-${arch}.${ext}
+win:
+  icon: desktop/icon.png
+  target:
+    - nsis
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+mac:
+  icon: desktop/icon.png
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  identity: null
+  notarize: false
+publish: null

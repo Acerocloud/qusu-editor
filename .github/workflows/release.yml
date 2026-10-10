@@ -1,0 +1,72 @@
+name: Desktop Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec install-electron
+      - run: pnpm test
+      - run: pnpm build
+      - run: node scripts/test-desktop.mjs
+      - run: pnpm exec electron-builder --${{ matrix.platform }} --x64 --arm64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify packaged Windows app
+        if: runner.os == 'Windows'
+        run: node scripts/test-desktop.mjs
+        env:
+          QUSU_TEST_EXECUTABLE: '${{ github.workspace }}\release\win-unpacked\QUSU Editor.exe'
+      - name: Verify packaged macOS app
+        if: runner.os == 'macOS'
+        run: node scripts/test-desktop.mjs
+        env:
+          QUSU_TEST_EXECUTABLE: '${{ github.workspace }}/release/mac-arm64/QUSU Editor.app/Contents/MacOS/QUSU Editor'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.platform }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" installers/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false

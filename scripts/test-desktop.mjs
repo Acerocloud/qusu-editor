@@ -1,0 +1,41 @@
+import { _electron, expect } from '@playwright/test';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+const userData = await mkdtemp(path.join(os.tmpdir(), 'qusu-desktop-test-'));
+const env = { ...process.env, QUSU_TEST_USER_DATA: userData };
+delete env.ELECTRON_RUN_AS_NODE;
+const executablePath = process.env.QUSU_TEST_EXECUTABLE;
+const launch = () => _electron.launch({ ...(executablePath ? { executablePath, args: [] } : { args: ['.'] }), env });
+let desktop;
+try {
+  desktop = await launch();
+  let page = await desktop.firstWindow();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await expect(page.locator('[data-block-id]')).toHaveCount(22);
+  expect(page.url()).toBe('qusu://app/index.html');
+  expect(await page.evaluate(() => typeof window.require)).toBe('undefined');
+  await page.getByLabel('文章主标题', { exact: true }).fill('桌面安装版持久化验证');
+  const image = page.locator('[data-block-type=image]');
+  await image.locator('input[type=file]').setInputFiles({ name: 'test.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6kAAAAABJRU5ErkJggg==', 'base64') });
+  await expect(image.locator('img')).toHaveAttribute('src', /^data:image/);
+  await page.getByRole('button', { name: '复制公众号排版', exact: true }).click();
+  await expect(page.locator('.toast')).toContainText('已复制富文本');
+  const copied = await desktop.evaluate(async ({ clipboard }) => { const items = await clipboard.read(); return (await items[0].getType('text/html')).text(); });
+  expect(copied).toContain('桌面安装版持久化验证');
+  expect(copied).not.toContain('data:image');
+  const exportPath = path.join(userData, 'project.qusu.json');
+  await desktop.evaluate(({ session }, target) => { session.defaultSession.once('will-download', (_event, item) => item.setSavePath(target)); }, exportPath);
+  await page.getByRole('button', { name: '保存 JSON', exact: true }).click();
+  await expect.poll(async () => { try { return JSON.parse(await readFile(exportPath, 'utf8')).blocks.length; } catch { return 0; } }).toBe(22);
+  await expect(page.getByText('已自动保存', { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+  await desktop.close();
+  desktop = await launch();
+  page = await desktop.firstWindow();
+  await expect(page.getByLabel('文章主标题', { exact: true })).toHaveValue('桌面安装版持久化验证');
+  await expect(page.locator('[data-block-type=image] img')).toHaveAttribute('src', /^data:image/);
+  console.log('Desktop smoke passed: launch, assets, clipboard, JSON download, article and image persistence.');
+} finally { if (desktop) await desktop.close(); }

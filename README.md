@@ -4,6 +4,10 @@
 
 ## 运行
 
+普通用户可从 [GitHub Releases](https://github.com/Acerocloud/qusu-editor/releases) 下载 Windows EXE 或 macOS DMG 安装包，无需 Node.js。不同平台的下载选择、签名提示和文章迁移见 [桌面版安装说明](docs/RELEASE_NOTES.md)。
+
+开发者可执行 `pnpm desktop` 启动桌面版；`pnpm dist:win` / `pnpm dist:mac` 在对应平台打包。推送 `v*` 标签后，GitHub Actions 自动构建 Windows x64 / ARM64、macOS Intel / Apple 芯片安装包，全部构建成功才发布 Release。
+
 需要 Node.js 20.19+ 或 22.12+（建议当前 LTS）。
 
 ```bash

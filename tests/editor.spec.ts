@@ -1,5 +1,5 @@
 import { test,expect } from '@playwright/test';
-test.beforeEach(async({page})=>{await page.goto('/');await page.evaluate(async()=>{localStorage.clear();await new Promise<void>((resolve,reject)=>{const req=indexedDB.open('qusu-editor',1);req.onsuccess=()=>{const db=req.result;const tx=db.transaction('projects','readwrite');tx.objectStore('projects').clear();tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};req.onerror=()=>reject(req.error);});});await page.reload();await expect(page.locator('[data-block-id]')).toHaveCount(22);});
+test.beforeEach(async({page})=>{await page.goto('/');await page.evaluate(async()=>{localStorage.clear();await new Promise<void>((resolve,reject)=>{const req=indexedDB.open('qusu-editor',1);req.onsuccess=()=>{const db=req.result;const tx=db.transaction('projects','readwrite');tx.objectStore('projects').clear();tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};req.onerror=()=>reject(req.error);});});await page.reload();await expect(page.locator('[data-block-id]')).toHaveCount(22);await page.getByRole('tab',{name:'模块',exact:true}).click();});
 test('edit, persist, copy, import and export',async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.getByLabel('文章主标题',{exact:true}).fill('中文研究文章标题');

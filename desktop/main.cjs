@@ -5,7 +5,7 @@ const path = require('node:path');
 
 app.setName('QUSU Editor');
 if (process.env.QUSU_TEST_USER_DATA) app.setPath('userData', process.env.QUSU_TEST_USER_DATA);
-const port = 17863; // Stable origin keeps browser articles across restarts and upgrades.
+const port = process.env.QUSU_TEST_USER_DATA && process.env.QUSU_TEST_PORT ? Number(process.env.QUSU_TEST_PORT) : 17863; // Stable origin keeps browser articles across restarts and upgrades.
 const url = `http://127.0.0.1:${port}/`;
 let server;
 let tray;

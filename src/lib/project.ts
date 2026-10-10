@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import type { Article, Block, BlockType, ContentMap, Styles } from '../types';
 import { blockTypes, createBlock, exampleBlocks, baseStyles } from '../blocks/registry';
 import { safeURL, sanitizeRich } from './sanitize';
-export function newArticle(): Article { const now = new Date().toISOString(); return { schemaVersion:1, id:nanoid(),title:'SOXAI RING X · Kickstarter 页面研究',blocks:exampleBlocks(),createdAt:now,updatedAt:now }; }
+export function newArticle(blank=false): Article { const now = new Date().toISOString(); return { schemaVersion:1, id:nanoid(),title:blank?'未命名文章':'把想法写成一篇好文章',blocks:blank?[]:exampleBlocks(),createdAt:now,updatedAt:now }; }
 function string(x: unknown): x is string { return typeof x==='string' && x.length<=5_000_000; }
 function strings(x: unknown): x is string[] { return Array.isArray(x) && x.length<=1000 && x.every(string); }
 function object(x: unknown): x is Record<string,unknown> { return !!x && typeof x==='object' && !Array.isArray(x); }

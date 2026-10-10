@@ -55,19 +55,32 @@ Section "Install"
   SetOutPath "$PLUGINSDIR"
   File /oname=launcher.exe "${BINARY_DIR}\QUSU Editor.exe"
   check_running:
+  ClearErrors
   ExecWait '"$PLUGINSDIR\launcher.exe" --check-running' $0
+  ${If} ${Errors}
+    SetErrorLevel 2
+    Abort "无法检查程序运行状态，安装已停止。请确认安全软件未阻止启动器。"
+  ${EndIf}
   ${If} $0 != 0
     IfSilent running_abort
     MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "请先从系统托盘退出正在运行的 QUSU Editor，再点击重试。" IDRETRY check_running
     running_abort:
+    SetErrorLevel 2
     Abort "QUSU Editor 正在运行，安装已停止。"
   ${EndIf}
   ; Let the registered previous uninstaller remove its own Electron files.
   ; Never recursively delete the selected folder or browser data.
   ${If} $OldPath != ""
   ${AndIf} $OldUninstall != ""
+    ClearErrors
+    StrCpy $0 -1
     ExecWait '$OldUninstall /S _?=$OldPath' $0
+    ${If} ${Errors}
+      SetErrorLevel 2
+      Abort "无法启动旧版卸载程序，安装已停止。请先卸载旧版后重试。"
+    ${EndIf}
     ${If} $0 != 0
+      SetErrorLevel 2
       Abort "旧版卸载失败，安装已停止。请先卸载旧版后重试。"
     ${EndIf}
     Delete "$OldPath\Uninstall QUSU Editor.exe"
@@ -96,11 +109,18 @@ Section "Uninstall"
   ${If} ${RunningX64}
     SetRegView 64
   ${EndIf}
+  uninstall_check_running:
+  ClearErrors
   ExecWait '"$INSTDIR\QUSU Editor.exe" --check-running' $0
+  ${If} ${Errors}
+    SetErrorLevel 2
+    Abort "无法检查程序运行状态，卸载已停止。请确认启动器未被安全软件隔离。"
+  ${EndIf}
   ${If} $0 != 0
     IfSilent uninstall_abort
-    MessageBox MB_ICONEXCLAMATION "请先从系统托盘退出 QUSU Editor，再卸载。"
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "请先从系统托盘退出 QUSU Editor，再点击重试卸载。" IDRETRY uninstall_check_running
     uninstall_abort:
+    SetErrorLevel 2
     Abort
   ${EndIf}
   Delete "$INSTDIR\QUSU Editor.exe"

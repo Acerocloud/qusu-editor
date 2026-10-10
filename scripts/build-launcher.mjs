@@ -51,7 +51,7 @@ for (const arch of architectures) {
     await writeFile(path.join(output, 'THIRD_PARTY_NOTICES.txt'), notices);
     if (packaging) {
       const compiler = process.env.QUSU_MAKENSIS || 'C:\\Program Files (x86)\\NSIS\\makensis.exe';
-      run(compiler, [`/DVERSION=${version}`, `/DARCH=${arch}`, `/DBINARY_DIR=${output}`, `/DPROJECT_DIR=${root}`, 'desktop/installer.nsi']);
+      run(compiler, ['/INPUTCHARSET', 'UTF8', `/DVERSION=${version}`, `/DARCH=${arch}`, `/DBINARY_DIR=${output}`, `/DPROJECT_DIR=${root}`, 'desktop/installer.nsi']);
     }
   } else {
     const contents = path.dirname(output);

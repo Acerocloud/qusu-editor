@@ -1,4 +1,6 @@
-# QUSU Editor 1.3.1 — 模板删除
+# QUSU Editor 1.3.2 — Windows 安装提示修复
+
+修复 Windows 安装与卸载提示中的中文乱码；程序正在运行时明确提示先从系统托盘退出，再点击重试。安装与卸载会区分正在运行和启动器执行失败，避免误判。验证中文及含空格路径、运行中保护，以及从 1.2.0、1.3.0 和 1.3.1 的升级。
 
 模板列表右侧新增「删除模板」垃圾桶，点击后确认，不会触发模板切换。删除当前模板时打开另一份模板；没有模板时返回已有文章，没有文章则显示空状态。模板草稿也可删除。删除结果持久化，旧标签页不会复活已删除模板；已有文章及其图片不受影响。保存失败时保留内容并提示错误。
 
@@ -28,10 +30,10 @@
 
 ## 下载安装
 
-- Windows（Intel / AMD）：下载 `QUSU-Editor-1.3.1-win-x64.exe`，双击安装。
-- Windows ARM：下载 `QUSU-Editor-1.3.1-win-arm64.exe`。
-- Mac（Apple 芯片）：下载 `QUSU-Editor-1.3.1-mac-arm64.dmg`，打开后将应用拖到 Applications。
-- Mac（Intel）：下载 `QUSU-Editor-1.3.1-mac-x64.dmg`，同样拖到 Applications。
+- Windows（Intel / AMD）：下载 `QUSU-Editor-1.3.2-win-x64.exe`，双击安装。
+- Windows ARM：下载 `QUSU-Editor-1.3.2-win-arm64.exe`。
+- Mac（Apple 芯片）：下载 `QUSU-Editor-1.3.2-mac-arm64.dmg`，打开后将应用拖到 Applications。
+- Mac（Intel）：下载 `QUSU-Editor-1.3.2-mac-x64.dmg`，同样拖到 Applications。
 - macOS 另提供 ZIP 包，解压后将应用放入 Applications。
 
 系统要求：Windows 10 / 11（64 位），macOS 12 或更新版本。

@@ -90,6 +90,18 @@ try {
   await expect(page.getByLabel('文章和模板侧栏')).toBeHidden();
   await page.getByLabel('切换左侧栏', { exact: true }).click();
   await expect(page.getByLabel('文章和模板侧栏')).toBeVisible();
+  for (const width of [850, 1000, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByLabel('收起左侧栏', { exact: true }).click();
+    const opener = page.getByLabel('打开左侧栏', { exact: true });
+    await expect(opener).toBeVisible();
+    const workspaceBounds = await page.locator('.workspace').boundingBox();
+    expect(workspaceBounds.x).toBeLessThan(1);
+    await opener.click();
+    await expect(page.getByLabel('文章和模板侧栏')).toBeVisible();
+    await expect(opener).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole('tab', { name: '模板', exact: true }).click();
   await page.getByRole('button', { name: '使用模板：研究模板', exact: true }).click();
   await expect(page.getByLabel('文章主标题', { exact: true })).toHaveValue('浏览器安装版持久化验证');

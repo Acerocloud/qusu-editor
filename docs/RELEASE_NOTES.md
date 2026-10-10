@@ -1,8 +1,12 @@
-# QUSU Editor 1.1.0
+# QUSU Editor 1.1.1
 
 安装后运行 QUSU Editor，程序自动启动本机服务并打开默认浏览器，在浏览器中编辑。无需安装 Node.js、手动启动开发服务器或连接付费 API。包含模块排版、局部文字样式、图片与相册、JSON 项目导入导出，以及复制公众号排版。
 
-## 新增文章库与模板库
+## 左侧栏展开修复
+
+左侧栏收起后，页面左边缘始终显示「文章与模板」按钮，点击可重新展开。修复宽屏下隐藏侧栏仍占据空白的问题，并验证窄窗口及宽屏布局。文章和模板数据保留。
+
+## 文章库与模板库
 
 左侧可收起的工作空间提供「文章 / 模板 / 模块」。支持新建、搜索、单独保存、切换文章；保存失败时不会切走当前文章。模板保存当前文字、样式和图片，使用模板会生成独立的新文章。旧版本当前文章会自动纳入文章库。新的默认示例改为通用内容，已有文章不被改写。
 
@@ -10,13 +14,13 @@
 
 ## 下载安装
 
-- Windows（Intel / AMD）：下载 `QUSU-Editor-1.1.0-win-x64.exe`，双击安装。
-- Windows ARM：下载 `QUSU-Editor-1.1.0-win-arm64.exe`。
-- Mac（Apple 芯片）：下载 `QUSU-Editor-1.1.0-mac-arm64.dmg`，打开后将应用拖到 Applications。
-- Mac（Intel）：下载 `QUSU-Editor-1.1.0-mac-x64.dmg`，同样拖到 Applications。
+- Windows（Intel / AMD）：下载 `QUSU-Editor-1.1.1-win-x64.exe`，双击安装。
+- Windows ARM：下载 `QUSU-Editor-1.1.1-win-arm64.exe`。
+- Mac（Apple 芯片）：下载 `QUSU-Editor-1.1.1-mac-arm64.dmg`，打开后将应用拖到 Applications。
+- Mac（Intel）：下载 `QUSU-Editor-1.1.1-mac-x64.dmg`，同样拖到 Applications。
 - macOS 另提供 ZIP 包，解压后将应用放入 Applications。
 
-此版本未做 Windows 代码签名、Apple 签名或公证。Windows 首次打开可能显示 SmartScreen 提示；确认下载自此私有仓库后选择“更多信息 → 仍要运行”。macOS 如阻止打开，请按 Apple 的“系统设置 → 隐私与安全性 → 仍要打开”流程确认。组织管理的设备可能要求管理员批准。若要求无此提示，需要配置对应平台的签名证书。
+此版本未做 Windows 代码签名、Apple 签名或公证。Windows 首次打开可能显示 SmartScreen 提示；确认下载自本项目 Release 后选择“更多信息 → 仍要运行”。macOS 如阻止打开，请按 Apple 的“系统设置 → 隐私与安全性 → 仍要打开”流程确认。组织管理的设备可能要求管理员批准。若要求无此提示，需要配置对应平台的签名证书。
 
 ## 本地文章
 
@@ -28,4 +32,4 @@
 
 滚动图片的公众号兼容性仍取决于公众号保存时的处理；上传公众号素材后填回图片 URL，并保存草稿、发送手机预览确认。
 
-仓库目前为私有，下载安装包需要有该仓库的访问权限。
+仓库已公开，可直接下载安装包。

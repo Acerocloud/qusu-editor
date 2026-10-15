@@ -9,7 +9,7 @@ export function LeftPanel({onClose}:{onClose:()=>void}){
   useEffect(()=>{setTab(state.activeMode==='template'?'templates':'articles');setSearch('');},[state.activeMode]);
   const live=(records:typeof state.articles,mode:'article'|'template')=>records.map(a=>state.activeMode===mode&&a.id===state.article.id?state.article:a).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
   const articles=live(state.articles,'article');
-  const templates=live(state.templates,'template');
+  const templates=live([...state.templates.filter(a=>!state.templateDrafts.some(d=>d.id===a.id)),...state.templateDrafts],'template');
   if(state.activeMode==='template'&&!templates.some(a=>a.id===state.article.id))templates.unshift(state.article);
   const entries=(tab==='articles'?articles:templates).filter(a=>a.title.toLowerCase().includes(search.toLowerCase()));
   return <aside className="left-panel" aria-label="文章和模板侧栏">

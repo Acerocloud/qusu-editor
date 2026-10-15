@@ -51,6 +51,8 @@ jobs:
         run: go test ./...
       - name: Test real packaged launcher and editor
         run: node scripts/test-desktop.mjs
+      - name: Verify automatic update, content recovery and rollback
+        run: node scripts/test-updater.mjs
       - name: Verify Windows installation and Electron upgrade cleanup
         if: runner.os == 'Windows'
         shell: pwsh
@@ -62,6 +64,7 @@ jobs:
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/update-*.json
           if-no-files-found: error
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -70,15 +73,24 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
           path: installers
           merge-multiple: true
+      - name: Sign automatic update packages
+        env:
+          QUSU_UPDATE_SIGNING_KEY: ${{ secrets.QUSU_UPDATE_SIGNING_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/sign-update.mjs installers
       - name: Publish installers
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release upload "$RELEASE_TAG" installers/* --clobber
+          gh release upload "$RELEASE_TAG" installers/*.exe installers/*.dmg installers/*.zip installers/update-manifest.json installers/update-manifest.sig --clobber
           gh release edit "$RELEASE_TAG" --draft=false

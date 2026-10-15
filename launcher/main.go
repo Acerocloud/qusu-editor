@@ -10,10 +10,13 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,13 +30,18 @@ var files embed.FS
 var icon []byte
 
 var version = "dev"
+var nativeReady atomic.Bool
 
 const appID = "com.qusu.editor"
 
-func handler(assets fs.FS, address string) http.Handler {
+func handler(assets fs.FS, address string, updates ...*updater) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Host != address {
 			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/.qusu-update") && len(updates) > 0 {
+			updates[0].api(w, r)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -45,7 +53,7 @@ func handler(assets fs.FS, address string) http.Handler {
 		if r.URL.Path == "/.qusu-launcher" {
 			w.Header().Set("Content-Type", "application/json")
 			if r.Method != http.MethodHead {
-				json.NewEncoder(w).Encode(map[string]string{"id": appID, "version": version})
+				json.NewEncoder(w).Encode(map[string]any{"id": appID, "version": version, "ready": nativeReady.Load()})
 			}
 			return
 		}
@@ -107,6 +115,28 @@ func openEditor(url string) {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--updated" && os.Getenv("QUSU_TEST_USER_DATA") != "" && os.Getenv("QUSU_TEST_UPDATE_FAIL_VERSION") == version {
+		os.Exit(1)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(version)
+		return
+	}
+	if len(os.Args) == 3 && os.Args[1] == "--activate-update" {
+		if err := applyActivation(os.Args[2]); err != nil {
+			activationError(err, os.Args[2])
+			if _, ready := os.Stat(filepath.Join(filepath.Dir(os.Args[2]), "handoff.ready")); ready == nil {
+				executable, _ := os.Executable()
+				command := exec.Command(executable, "--updated")
+				backgroundCommand(command)
+				if command.Start() == nil {
+					command.Process.Release()
+				}
+			}
+			os.Exit(1)
+		}
+		return
+	}
 	port := 17863 // Keep the same origin as all browser-based Electron versions.
 	if os.Getenv("QUSU_TEST_USER_DATA") != "" && os.Getenv("QUSU_TEST_PORT") != "" {
 		value, err := strconv.Atoi(os.Getenv("QUSU_TEST_PORT"))
@@ -125,6 +155,9 @@ func main() {
 		probe.Close()
 		return
 	}
+	if forwardUpdated() {
+		return
+	}
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		if existingLauncher(url) {
@@ -140,12 +173,14 @@ func main() {
 		os.Exit(1)
 	}
 	assets, _ := fs.Sub(files, "web")
-	server := &http.Server{Handler: handler(assets, address), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
+	updates := newUpdater(address, systray.Quit)
+	server := &http.Server{Handler: handler(assets, address, updates), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
 	go server.Serve(listener)
 	systray.Run(func() {
 		setTrayIcon(icon)
 		systray.SetTooltip("QUSU Editor — 浏览器编辑器")
 		open := systray.AddMenuItem("打开编辑器", "在默认浏览器中打开")
+		checkUpdate := systray.AddMenuItem("检查更新", "自动下载并升级到最新版本")
 		systray.AddMenuItem(url, "本机编辑地址").Disable()
 		systray.AddSeparator()
 		quit := systray.AddMenuItem("退出 QUSU Editor", "停止本机服务")
@@ -155,6 +190,9 @@ func main() {
 				select {
 				case <-open.ClickedCh:
 					openEditor(url)
+				case <-checkUpdate.ClickedCh:
+					openEditor(url)
+					go updates.check(true)
 				case <-quit.ClickedCh:
 					systray.Quit()
 					return
@@ -175,8 +213,15 @@ func main() {
 				}
 			}()
 		}
+		nativeReady.Store(true)
 		testRecord("tray-ready.txt", version)
-		openEditor(url)
+		testRecord("native-instances.jsonl", fmt.Sprintf(`{"pid":%d,"version":%q}`, os.Getpid(), version))
+		if len(os.Args) != 2 || os.Args[1] != "--updated" {
+			openEditor(url)
+		}
+		if os.Getenv("QUSU_TEST_USER_DATA") == "" || os.Getenv("QUSU_TEST_UPDATE_FEED") != "" {
+			updates.run()
+		}
 	}, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

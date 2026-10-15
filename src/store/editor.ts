@@ -9,8 +9,8 @@ let loadError='';
 let validCache=false;
 function load():Article { try { const data=localStorage.getItem(KEY);if(data){const a=parseProject(data);validCache=true;return a;}return newArticle(); } catch {loadError='本地记录无法恢复，已打开示范文章。原记录保留，首次修改前请导出备份。';return newArticle();} }
 export interface EditorState {
-  article:Article; selected:string|null; past:Article[]; future:Article[]; saved:'saved'|'saving'|'error'; error:string; hydrated:boolean;
-  articles:Article[]; templates:Article[]; libraryBusy:boolean; activeMode:EditMode; templateDirty:boolean; deletedArticleIds:string[]; deletedTemplateIds:string[];
+  article:Article; selected:string|null; past:Article[]; future:Article[]; saved:'saved'|'saving'|'error'; error:string; hydrated:boolean; updating:boolean;
+  articles:Article[]; templates:Article[]; templateDrafts:Article[]; libraryBusy:boolean; activeMode:EditMode; templateDirty:boolean; deletedArticleIds:string[]; deletedTemplateIds:string[];
   saveArticle:()=>Promise<void>; createArticle:()=>Promise<void>; openArticle:(id:string)=>Promise<void>; deleteArticle:(id:string)=>Promise<void>;
   saveTemplate:()=>Promise<void>; createTemplate:()=>Promise<void>; articleToTemplate:(name:string)=>Promise<void>; openTemplate:(id:string)=>Promise<void>; useTemplate:()=>Promise<void>; deleteTemplate:(id:string)=>Promise<void>;
   select:(id:string|null)=>void; commit:(a:Article,key?:string)=>void;
@@ -21,20 +21,20 @@ export interface EditorState {
 }
 let lastKey='';let lastTime=0;
 export const useEditorStore=create<EditorState>((set,get)=>({
-  article:load(),articles:[],templates:[],libraryBusy:false,activeMode:'article',templateDirty:false,deletedArticleIds:[],deletedTemplateIds:[],selected:null,past:[],future:[],saved:'saved',error:loadError,hydrated:false,
+  article:load(),articles:[],templates:[],templateDrafts:[],libraryBusy:false,activeMode:'article',templateDirty:false,deletedArticleIds:[],deletedTemplateIds:[],selected:null,past:[],future:[],saved:'saved',error:loadError,hydrated:false,updating:false,
   saveArticle:()=>persist(),
   createArticle:()=>transition('article',newArticle(true)),
   openArticle:id=>{const a=get().articles.find(a=>a.id===id);return a&&(get().activeMode!=='article'||a.id!==get().article.id)?transition('article',a):Promise.resolve();},
   saveTemplate:()=>get().activeMode==='template'?persist():Promise.resolve(),
   createTemplate:()=>transition('template',{...newArticle(true),title:'未命名模板'},true),
   articleToTemplate:name=>get().activeMode==='article'?transition('template',cloneArticle(get().article,name.trim()||'未命名模板'),true):Promise.resolve(),
-  openTemplate:id=>{const a=get().templates.find(a=>a.id===id);return a&&(get().activeMode!=='template'||a.id!==get().article.id)?transition('template',a):Promise.resolve();},
+  openTemplate:id=>{const draft=get().templateDrafts.find(a=>a.id===id);const a=draft||get().templates.find(a=>a.id===id);return a&&(get().activeMode!=='template'||a.id!==get().article.id)?transition('template',a,!!draft):Promise.resolve();},
   useTemplate:()=>get().activeMode==='template'?transition('article',cloneArticle(get().article,`${get().article.title} · 新文章`)):Promise.resolve(),
   deleteArticle:id=>transition(undefined,undefined,false,id),
   deleteTemplate:id=>transition(undefined,undefined,false,id,'template'),
   select:selected=>set({selected}),
   commit:(article,key)=>{
-    const state=get();if(state.libraryBusy||state.activeMode==='empty')return;if(JSON.stringify(state.article)===JSON.stringify(article))return;
+    const state=get();if(state.libraryBusy||state.updating||state.activeMode==='empty')return;if(JSON.stringify(state.article)===JSON.stringify(article))return;
     const now=Date.now();const merge=!!key&&key===lastKey&&now-lastTime<900;
     lastKey=key||'';lastTime=now;
     set({article:{...article,updatedAt:new Date().toISOString()},past:merge?state.past:[...state.past,state.article].slice(-80),future:[],saved:'saving',templateDirty:state.activeMode==='template'});
@@ -58,20 +58,20 @@ const histories=new Map<string,{past:Article[];future:Article[];selected:string|
 function historyKey(mode:EditMode,article:Article){return `${mode}:${article.id}`;}
 function upsert(records:Article[],article:Article){return [...records.filter(a=>a.id!==article.id),article];}
 function workspace(state:EditorState,finalizeTemplate=false):Workspace{
-  let articles=state.articles;let templates=state.templates;let draft:Article|null=null;
+  let articles=state.articles;let templates=state.templates;let draft:Article|null=null;let templateDrafts=state.templateDrafts;
   if(state.activeMode==='article')articles=upsert(articles,state.article);
   if(state.activeMode==='template'){
-    if(state.templateDirty&&!finalizeTemplate)draft=state.article;
-    else templates=upsert(templates,state.article);
+    if(state.templateDirty&&!finalizeTemplate){draft=state.article;templateDrafts=upsert(templateDrafts,state.article);}
+    else{templates=upsert(templates,state.article);templateDrafts=templateDrafts.filter(a=>a.id!==state.article.id);}
   }
-  return {version:2,activeMode:state.activeMode,activeId:state.activeMode==='empty'?null:state.article.id,articles,templates,draft,deletedArticleIds:state.deletedArticleIds,deletedTemplateIds:state.deletedTemplateIds};
+  return {version:2,activeMode:state.activeMode,activeId:state.activeMode==='empty'?null:state.article.id,articles,templates,draft,templateDrafts,deletedArticleIds:state.deletedArticleIds,deletedTemplateIds:state.deletedTemplateIds};
 }
 function cloneArticle(source:Article,title:string):Article{const now=new Date().toISOString();return {...structuredClone(source),id:nanoid(),title,createdAt:now,updatedAt:now,blocks:source.blocks.map(b=>({...structuredClone(b),id:nanoid(),...('images' in b.content?{content:{...structuredClone(b.content),images:b.content.images.map(i=>({...i,id:nanoid()}))}}:{})})) as Block[]};}
 function applyWorkspace(data:Workspace,restoreHistory=false){
   const article=data.activeMode==='empty'?emptyArticle:data.draft||(data.activeMode==='template'?data.templates:data.articles).find(a=>a.id===data.activeId)!;
   const history=histories.get(historyKey(data.activeMode,article))||{past:[],future:[],selected:null};
   applying=true;
-  useEditorStore.setState({article,activeMode:data.activeMode,articles:data.articles,templates:data.templates,deletedArticleIds:data.deletedArticleIds,deletedTemplateIds:data.deletedTemplateIds,templateDirty:!!data.draft,libraryBusy:false,saved:data.draft?'saving':'saved',error:'',...(restoreHistory?history:{})});
+  useEditorStore.setState({article,activeMode:data.activeMode,articles:data.articles,templates:data.templates,templateDrafts:data.templateDrafts||[],deletedArticleIds:data.deletedArticleIds,deletedTemplateIds:data.deletedTemplateIds,templateDirty:!!data.draft,libraryBusy:false,saved:data.draft?'saving':'saved',error:'',...(restoreHistory?history:{})});
   applying=false;
 }
 async function persist(){
@@ -80,29 +80,36 @@ async function persist(){
   try{const stored=await writeWorkspace(workspace(state,true));applyWorkspace(stored,stored.activeMode!==state.activeMode||stored.activeId!==state.article.id);}
   catch{useEditorStore.setState({libraryBusy:false,saved:'error',error:'本地保存失败，当前内容已保留。请导出 JSON 备份后重试。'});}
 }
+// Save recovery drafts without implicitly publishing them as saved templates.
+export async function prepareForUpdate():Promise<boolean>{
+  const state=useEditorStore.getState();if(!state.hydrated||state.libraryBusy)return false;
+  clearTimeout(saveTimer);useEditorStore.setState({libraryBusy:true,updating:true});
+  try{const stored=await writeWorkspace(workspace(state));applyWorkspace(stored,stored.activeMode!==state.activeMode||stored.activeId!==state.article.id);return true;}
+  catch{useEditorStore.setState({libraryBusy:false,updating:false,saved:'error',error:'当前内容保存失败，已暂停自动升级。请导出 JSON 备份或释放存储空间后重试。'});return false;}
+}
 async function transition(mode?:EditMode,article?:Article,isDraft=false,deleteId?:string,deleteMode:'article'|'template'='article'){
   const state=useEditorStore.getState();if(state.libraryBusy)return;
-  if(deleteId&&!(deleteMode==='article'?state.articles:state.templates).some(a=>a.id===deleteId)&&!(state.activeMode===deleteMode&&state.article.id===deleteId))return;
+  if(deleteId&&!(deleteMode==='article'?state.articles:[...state.templates,...state.templateDrafts]).some(a=>a.id===deleteId)&&!(state.activeMode===deleteMode&&state.article.id===deleteId))return;
   clearTimeout(saveTimer);useEditorStore.setState({libraryBusy:true});
   const data=workspace(state,true);
   if(deleteId){
     if(deleteMode==='article'){data.deletedArticleIds=[...new Set([...data.deletedArticleIds,deleteId])];data.articles=data.articles.filter(a=>a.id!==deleteId);}
     else{data.deletedTemplateIds=[...new Set([...data.deletedTemplateIds,deleteId])];data.templates=data.templates.filter(a=>a.id!==deleteId);}
     if(state.activeMode===deleteMode&&state.article.id===deleteId){
-      const next=[...(deleteMode==='template'?data.templates:data.articles)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
+      const next=[...(deleteMode==='template'?[...data.templates,...(data.templateDrafts||[]).filter(a=>a.id!==deleteId)]:data.articles)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
       const fallback=deleteMode==='template'?[...data.articles].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]:undefined;
       mode=next?deleteMode:fallback?'article':'empty';article=next||fallback;
     }
   }
   if(mode){data.activeMode=mode;data.activeId=article?.id||null;data.draft=null;
     if(mode==='article'&&article)data.articles=upsert(data.articles,article);
-    if(mode==='template'&&article){if(isDraft)data.draft=article;else data.templates=upsert(data.templates,article);}
+    if(mode==='template'&&article){if(isDraft||data.templateDrafts?.some(a=>a.id===article.id))data.draft=article;else data.templates=upsert(data.templates,article);}
   }
   try{
     const stored=await writeWorkspace(data);
     histories.set(historyKey(state.activeMode,state.article),{past:state.past,future:state.future,selected:state.selected});
     if(deleteId)histories.delete(`${deleteMode}:${deleteId}`);
-    lastKey='';applyWorkspace(stored,!!mode);
+    lastKey='';applyWorkspace(stored,!!mode||stored.activeMode!==state.activeMode||stored.activeId!==state.article.id);
   }catch{useEditorStore.setState({libraryBusy:false,saved:'error',error:'本地保存失败，未切换或删除文档，当前内容已保留。请导出 JSON 备份后重试。'});}
 }
 async function autosave(){
@@ -111,12 +118,12 @@ async function autosave(){
     const stored=await writeWorkspace(workspace(state));
     if(useEditorStore.getState().article===state.article&&!useEditorStore.getState().libraryBusy){
       if(stored.activeMode!==state.activeMode||stored.activeId!==state.article.id)applyWorkspace(stored,true);
-      else useEditorStore.setState({articles:stored.articles,templates:stored.templates,deletedArticleIds:stored.deletedArticleIds,deletedTemplateIds:stored.deletedTemplateIds,saved:state.activeMode==='template'&&state.templateDirty?'saving':'saved',error:''});
+      else useEditorStore.setState({articles:stored.articles,templates:stored.templates,templateDrafts:stored.templateDrafts||[],deletedArticleIds:stored.deletedArticleIds,deletedTemplateIds:stored.deletedTemplateIds,saved:state.activeMode==='template'&&state.templateDirty?'saving':'saved',error:''});
     }
   }catch{useEditorStore.setState({saved:'error',error:'本地保存失败，当前内容已保留。请导出 JSON 备份后重试。'});}
 }
 useEditorStore.subscribe((state,prev)=>{if(state.article!==prev.article&&!applying&&!state.libraryBusy&&state.hydrated){clearTimeout(saveTimer);saveTimer=setTimeout(autosave,450);}});
-window.addEventListener('pagehide',()=>{const state=useEditorStore.getState();if(state.saved!=='saved')cacheOnExit(workspace(state));});
+window.addEventListener('pagehide',()=>{const state=useEditorStore.getState();if(state.saved!=='saved'&&!state.updating)cacheOnExit(workspace(state));});
 void (async()=>{
   const library=await readWorkspace();
   if(library){
@@ -124,6 +131,10 @@ void (async()=>{
     const active=library.articles.find(a=>a.id===library.activeId);
     const newerCache=library.activeMode==='article'&&validCache&&active?.id===cached.id&&!library.deletedArticleIds.includes(cached.id)&&Date.parse(cached.updatedAt)>Date.parse(active.updatedAt);
     if(newerCache)library.articles=upsert(library.articles,cached);
+    try{const selection=JSON.parse(sessionStorage.getItem('qusu-update-selection')||'null');sessionStorage.removeItem('qusu-update-selection');
+      if(selection?.mode==='article'&&library.articles.some(a=>a.id===selection.id)){library.activeMode='article';library.activeId=selection.id;library.draft=null;}
+      else if(selection?.mode==='template'&&[...library.templates,...(library.templateDrafts||[])].some(a=>a.id===selection.id)){library.activeMode='template';library.activeId=selection.id;library.draft=library.templateDrafts?.find(a=>a.id===selection.id)||null;}
+    }catch{/* A missing tab selection never blocks recovery of the workspace. */}
     applyWorkspace(library,true);
     if(newerCache){useEditorStore.setState({saved:'saving'});saveTimer=setTimeout(autosave,450);}
     return;

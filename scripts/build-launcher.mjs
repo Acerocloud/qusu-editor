@@ -1,12 +1,14 @@
 import { cp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 const root = process.cwd();
-const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+const version = process.env.QUSU_BUILD_VERSION || JSON.parse(await readFile('package.json', 'utf8')).version;
 const archOption = process.argv.indexOf('--arch');
 const architectures = (archOption < 0 ? (process.arch === 'arm64' ? 'arm64' : 'x64') : process.argv[archOption + 1]).split(',');
-const packaging = process.argv.includes('--package');
+const updateOnly = process.argv.includes('--update-only');
+const packaging = process.argv.includes('--package')||updateOnly;
 const windows = process.platform === 'win32';
 if (!windows && process.platform !== 'darwin') throw new Error('Launchers are built on Windows or macOS.');
 const go = process.env.QUSU_GO || 'go';
@@ -33,7 +35,7 @@ for (const arch of architectures) {
   const output = path.join(root, 'release', windows ? `win-${arch}` : `mac-${arch}/QUSU Editor.app/Contents/MacOS`);
   await mkdir(output, { recursive: true });
   const executable = path.join(output, windows ? 'QUSU Editor.exe' : 'QUSU Editor');
-  const flags = `-s -w -X main.version=${version}${windows ? ' -H=windowsgui' : ''}`;
+  const flags = `-s -w -X main.version=${version}${process.env.QUSU_UPDATE_PUBLIC_KEY ? ' -X main.updatePublicKey='+process.env.QUSU_UPDATE_PUBLIC_KEY : ''}${windows ? ' -H=windowsgui' : ''}`;
   const env = { ...process.env, GOARCH: arch === 'x64' ? 'amd64' : 'arm64', CGO_ENABLED: windows ? '0' : '1' };
   if (!windows) {
     env.CGO_CFLAGS = `-arch ${arch === 'x64' ? 'x86_64' : 'arm64'} -mmacosx-version-min=12.0`;
@@ -51,7 +53,8 @@ for (const arch of architectures) {
     await writeFile(path.join(output, 'THIRD_PARTY_NOTICES.txt'), notices);
     if (packaging) {
       const compiler = process.env.QUSU_MAKENSIS || 'C:\\Program Files (x86)\\NSIS\\makensis.exe';
-      run(compiler, ['/INPUTCHARSET', 'UTF8', `/DVERSION=${version}`, `/DARCH=${arch}`, `/DBINARY_DIR=${output}`, `/DPROJECT_DIR=${root}`, 'desktop/installer.nsi']);
+      if(!updateOnly)run(compiler, ['/INPUTCHARSET', 'UTF8', `/DVERSION=${version}`, `/DARCH=${arch}`, `/DBINARY_DIR=${output}`, `/DPROJECT_DIR=${root}`, 'desktop/installer.nsi']);
+      run(go, ['run', './cmd/pack', output, path.join(root,'release',`QUSU-Editor-${version}-update-win-${arch}.zip`)],{cwd:path.join(root,'launcher')});
     }
   } else {
     const contents = path.dirname(output);
@@ -85,12 +88,22 @@ for (const arch of architectures) {
     if (packaging) {
       const base = path.join(root, 'release', `QUSU-Editor-${version}-mac-${arch}`);
       run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, base + '.zip']);
+      await cp(base+'.zip',path.join(root,'release',`QUSU-Editor-${version}-update-mac-${arch}.zip`));
+      if(!updateOnly){
       const staging = path.join(root, 'release', `dmg-${arch}`);
       await mkdir(staging, { recursive: true });
       await cp(app, path.join(staging, 'QUSU Editor.app'), { recursive: true });
       run('/bin/ln', ['-s', '/Applications', path.join(staging, 'Applications')]);
       run('/usr/bin/hdiutil', ['create', '-volname', 'QUSU Editor', '-srcfolder', staging, '-ov', '-format', 'UDZO', base+'.dmg']);
+      }
     }
+  }
+  if (packaging) {
+    const platform = `${windows?'win':'mac'}-${arch}`;
+    const name=`QUSU-Editor-${version}-update-${platform}.zip`;
+    const payload=await readFile(path.join(root,'release',name));
+    const binary=await readFile(executable);
+    await writeFile(path.join(root,'release',`update-${platform}.json`),JSON.stringify({version,platform,asset:{name,size:payload.length,sha256:createHash('sha256').update(payload).digest('hex'),executableSha256:createHash('sha256').update(binary).digest('hex')}}));
   }
   console.log(`Built lightweight ${arch} launcher: ${executable}`);
 }

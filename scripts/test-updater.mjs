@@ -21,7 +21,7 @@ const signature=sign(null,manifest,keys.privateKey).toString('base64');
 const originalVersion='1.3.99';
 let mode='current';let payloadRequests=0;
 const feed=http.createServer((request,response)=>{
-  if(request.url==='/latest'){response.setHeader('Content-Type','application/json');response.end(JSON.stringify({tag_name:`v${mode==='current'?originalVersion:target}`}));}
+  if(request.url==='/latest'){if(mode==='offline'){response.writeHead(503);response.end();return;}response.setHeader('Content-Type','application/json');response.end(JSON.stringify({tag_name:`v${mode==='current'?originalVersion:target}`}));}
   else if(request.url.endsWith('/update-manifest.json'))response.end(manifest);
   else if(request.url.endsWith('/update-manifest.sig'))response.end(mode==='bad-signature'?'invalid':signature);
   else if(request.url.endsWith('/'+name)){payloadRequests++;if(mode==='bad-hash'){const corrupt=Buffer.from(payload);corrupt[corrupt.length-1]^=1;response.end(corrupt);}else response.end(payload);}
@@ -56,8 +56,17 @@ async function scenario(rollback){
   try{
     await expect.poll(async()=>(await health()).version,{timeout:15000}).toBe(originalVersion);
     browser=await chromium.launchPersistentContext(path.join(userData,'browser'),{headless:true});
-    const page=await browser.newPage();await page.goto(url);
+    const page=await browser.newPage();await page.goto(url+'?checkUpdate=1');
     await expect(page.getByRole('button',{name:'检查更新',exact:true})).toBeVisible();
+    const updateDialog=page.getByRole('dialog',{name:'软件更新'});
+    await expect(updateDialog).toContainText('已是最新版本');
+    await expect(updateDialog).toContainText(`当前版本：v${originalVersion}`);
+    await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
+    mode='offline';await page.getByRole('button',{name:'检查更新',exact:true}).click();
+    await expect(updateDialog).toContainText('503');
+    mode='current';await updateDialog.getByRole('button',{name:'重新检查',exact:true}).click();
+    await expect(updateDialog).toContainText('已是最新版本');
+    await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
     await page.getByLabel('当前文章名称').fill('自动升级保留的文章');
     await page.getByLabel('文章主标题',{exact:true}).fill(rollback?'回退后仍在的内容':'文章内容保持独立');
     await page.locator('[data-block-type=image] input[type=file]').setInputFiles({name:'keep.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6kAAAAABJRU5ErkJggg==','base64')});
@@ -80,12 +89,28 @@ async function scenario(rollback){
       await articlePage.getByLabel('文章主标题',{exact:true}).fill('另一窗口的文章也必须保存');
       for(const bad of ['bad-signature','bad-hash']){
         mode=bad;await page.getByRole('button',{name:'检查更新',exact:true}).click();
+        if(bad==='bad-hash')await updateDialog.getByRole('button',{name:'立即更新',exact:true}).click();
         await expect.poll(async()=>(await status()).phase,{timeout:15000}).toBe('error');
         expect((await status()).error).toContain(bad==='bad-signature'?'签名':'校验');
         expect((await health()).version).toBe(originalVersion);
+        if(await updateDialog.isVisible())await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
       }
     }
     mode='valid';await page.getByRole('button',{name:'检查更新',exact:true}).click();
+    await expect(updateDialog).toContainText('发现新版本');
+    await expect(updateDialog).toContainText(`最新版本：v${target}`);
+    const beforeConsent=payloadRequests;
+    await updateDialog.getByRole('button',{name:'暂不更新',exact:true}).click();
+    await sleep(11000);
+    expect(payloadRequests).toBe(beforeConsent);
+    expect((await status()).phase).toBe('available');
+    expect((await health()).version).toBe(originalVersion);
+    await page.getByLabel('软件自动更新').getByRole('button',{name:'查看更新',exact:true}).click();
+    await page.keyboard.press('Escape');await expect(updateDialog).not.toBeVisible();
+    expect(payloadRequests).toBe(beforeConsent);
+    await page.getByLabel('软件自动更新').getByRole('button',{name:'查看更新',exact:true}).click();
+    await page.screenshot({path:'test-results/update-confirmation.png'});
+    await updateDialog.getByRole('button',{name:'立即更新',exact:true}).click();
     if(articlePage){
       await expect(articlePage.getByLabel('软件自动更新')).toContainText('当前内容保存失败，已暂停自动升级',{timeout:20000});
       await sleep(11000);expect((await health()).version).toBe(originalVersion);

@@ -92,6 +92,16 @@ func TestUpdateNetworkAndHashFailure(t *testing.T) {
 		mode = scenario.mode
 		u := newUpdater("127.0.0.1:17863", func() {})
 		u.check(true)
+		if mode == "hash" {
+			if u.snapshot().Phase != "available" {
+				t.Fatal("check must stop before downloading")
+			}
+			u.install()
+			deadline := time.Now().Add(time.Second * 5)
+			for u.snapshot().Phase == "downloading" && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond * 10)
+			}
+		}
 		status := u.snapshot()
 		if status.Phase != "error" || !strings.Contains(status.Error, scenario.contains) {
 			t.Fatalf("%s: %+v", mode, status)
@@ -120,6 +130,37 @@ func TestUpdateClientReadiness(t *testing.T) {
 	u.readyAt = now
 	if u.canInstall(now) {
 		t.Fatal("download activated without grace period")
+	}
+}
+
+func TestCheckRequiresExplicitConsent(t *testing.T) {
+	private := trustFixture(t)
+	data, signature := manifestFixture(t, private, []byte("zip"))
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/latest":
+			w.Write([]byte(`{"tag_name":"v1.5.0"}`))
+		case strings.HasSuffix(r.URL.Path, ".json"):
+			w.Write(data)
+		case strings.HasSuffix(r.URL.Path, ".sig"):
+			w.Write([]byte(signature))
+		default:
+			requests++
+		}
+	}))
+	defer server.Close()
+	t.Setenv("QUSU_TEST_USER_DATA", t.TempDir())
+	t.Setenv("QUSU_TEST_UPDATE_FEED", server.URL+"/latest")
+	u := newUpdater("127.0.0.1:17863", func() {})
+	if u.install() {
+		t.Fatal("installation accepted without an available release")
+	}
+	for _, manual := range []bool{false, true} {
+		u.check(manual)
+		if u.snapshot().Phase != "available" || requests != 0 || u.canInstall(time.Now().Add(time.Hour)) {
+			t.Fatal("checking downloaded or activated an update without consent")
+		}
 	}
 }
 func TestUpdaterAPISameOrigin(t *testing.T) {

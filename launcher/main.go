@@ -180,7 +180,7 @@ func main() {
 		setTrayIcon(icon)
 		systray.SetTooltip("QUSU Editor — 浏览器编辑器")
 		open := systray.AddMenuItem("打开编辑器", "在默认浏览器中打开")
-		checkUpdate := systray.AddMenuItem("检查更新", "自动下载并升级到最新版本")
+		checkUpdate := systray.AddMenuItem("检查更新", "打开网页检查并选择是否更新")
 		systray.AddMenuItem(url, "本机编辑地址").Disable()
 		systray.AddSeparator()
 		quit := systray.AddMenuItem("退出 QUSU Editor", "停止本机服务")
@@ -191,8 +191,7 @@ func main() {
 				case <-open.ClickedCh:
 					openEditor(url)
 				case <-checkUpdate.ClickedCh:
-					openEditor(url)
-					go updates.check(true)
+					openEditor(url + "?checkUpdate=1")
 				case <-quit.ClickedCh:
 					systray.Quit()
 					return

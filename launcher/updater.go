@@ -63,7 +63,15 @@ type updater struct {
 	busy                              bool
 	failedVersion                     string
 	job                               string
+	pending                           *pendingUpdate
 	quit                              func()
+}
+
+type pendingUpdate struct {
+	manifest  []byte
+	signature string
+	asset     updateAsset
+	base      string
 }
 
 func versionParts(value string) ([3]int, error) {
@@ -198,7 +206,6 @@ func (u *updater) snapshot() updateStatus {
 func (u *updater) fail(err error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	u.busy = false
 	u.status.Phase = "error"
 	u.status.Error = err.Error()
 }
@@ -297,6 +304,32 @@ func (u *updater) check(manual bool) {
 		u.fail(errors.New("暂未提供适合此电脑的更新包"))
 		return
 	}
+	u.mu.Lock()
+	u.pending = &pendingUpdate{manifest: manifestData, signature: strings.TrimSpace(string(signature)), asset: asset, base: base}
+	u.status.Phase = "available"
+	u.mu.Unlock()
+}
+
+// Downloading is only allowed after an explicit same-origin confirmation.
+func (u *updater) install() bool {
+	u.mu.Lock()
+	if u.busy || u.status.Phase != "available" || u.pending == nil {
+		u.mu.Unlock()
+		return false
+	}
+	pending := *u.pending
+	u.busy = true
+	u.status.Phase = "downloading"
+	u.status.Progress = 0
+	u.postponedUntil = time.Time{}
+	u.mu.Unlock()
+	go u.downloadConfirmed(pending)
+	return true
+}
+
+func (u *updater) downloadConfirmed(pending pendingUpdate) {
+	defer func() { u.mu.Lock(); u.busy = false; u.mu.Unlock() }()
+	asset := pending.asset
 	if err := os.MkdirAll(u.root, 0700); err != nil {
 		u.fail(errors.New("无法创建更新缓存，请检查磁盘权限"))
 		return
@@ -310,7 +343,7 @@ func (u *updater) check(manual bool) {
 	u.status.Phase = "downloading"
 	u.status.Progress = 0
 	u.mu.Unlock()
-	if err := u.download(base+asset.Name, filepath.Join(dir, "package.zip"), asset); err != nil {
+	if err := u.download(pending.base+asset.Name, filepath.Join(dir, "package.zip"), asset); err != nil {
 		u.fail(err)
 		return
 	}
@@ -318,7 +351,7 @@ func (u *updater) check(manual bool) {
 		u.fail(err)
 		return
 	}
-	job := activation{Directory: filepath.Base(dir), Manifest: manifestData, Signature: strings.TrimSpace(string(signature)), ParentPID: os.Getpid(), Address: u.address}
+	job := activation{Directory: filepath.Base(dir), Manifest: pending.manifest, Signature: pending.signature, ParentPID: os.Getpid(), Address: u.address}
 	jobData, _ := json.Marshal(job)
 	jobPath := filepath.Join(dir, "job.json")
 	if err := os.WriteFile(jobPath, jobData, 0600); err != nil {
@@ -400,7 +433,12 @@ func (u *updater) api(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/.qusu-update/check":
-		go u.check(true)
+		u.check(true)
+	case "/.qusu-update/install":
+		if !u.install() {
+			http.Error(w, "Check for an available update first", 409)
+			return
+		}
 	case "/.qusu-update/postpone":
 		u.mu.Lock()
 		if u.status.Phase == "installing" {

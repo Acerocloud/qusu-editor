@@ -502,7 +502,11 @@ func (u *updater) canInstall(now time.Time) bool {
 func (u *updater) run() {
 	go func() {
 		time.Sleep(3 * time.Second)
-		u.check(false)
+		// A manual check during startup already supplies the result. Do not
+		// overwrite its download/error state with a second automatic check.
+		if u.snapshot().CheckedAt == "" {
+			u.check(false)
+		}
 		ticker := time.NewTicker(6 * time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {

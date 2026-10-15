@@ -71,6 +71,7 @@ async function scenario(rollback){
     await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
     mode='offline';await page.getByRole('button',{name:'检查更新',exact:true}).click();
     await expect(updateDialog).toContainText('503');
+    await expect(updateDialog.getByRole('link',{name:'手动下载安装'})).toHaveAttribute('href','https://github.com/Acerocloud/qusu-editor/releases/latest');
     mode='current';await updateDialog.getByRole('button',{name:'重新检查',exact:true}).click();
     await expect(updateDialog).toContainText('已是最新版本');
     await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();

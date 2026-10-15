@@ -160,7 +160,7 @@ func newUpdater(address string, quit func()) *updater {
 	token := make([]byte, 32)
 	rand.Read(token)
 	u := &updater{status: updateStatus{Current: version, Phase: "idle", Token: hex.EncodeToString(token)}, clients: map[string]updateClient{}, root: root, address: address, feed: releaseAPI, downloadBase: releaseBase, quit: quit}
-	u.client = &http.Client{Timeout: 3 * time.Minute, CheckRedirect: func(r *http.Request, via []*http.Request) error {
+	u.client = &http.Client{Transport: updateTransport(), Timeout: 3 * time.Minute, CheckRedirect: func(r *http.Request, via []*http.Request) error {
 		if len(via) > 8 {
 			return errors.New("更新下载重定向过多")
 		}
@@ -372,7 +372,7 @@ func (u *updater) download(target, destination string, asset updateAsset) error 
 	request.Header.Set("User-Agent", "QUSU-Editor/"+version)
 	response, err := u.client.Do(request)
 	if err != nil {
-		return errors.New("更新下载失败，请检查网络后重试")
+		return errors.New("更新下载失败，请检查系统代理或网络后重试；也可手动下载安装")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {

@@ -80,6 +80,6 @@ export function UpdateNotice(){
       {(requestError||status.phase==='error')&&<p className="update-dialog-error">{requestError||status.error}</p>}
       {status.phase==='available'&&!checking&&<p>是否立即更新？确认后将下载新版，保存所有编辑窗口的内容并重启。</p>}
     </div>
-    <footer><button onClick={()=>setModal(false)}>{!checking&&status.phase==='available'?'暂不更新':'关闭'}</button>{!checking&&status.phase==='available'&&!requestError?<button className="update-dialog-primary" onClick={()=>void install()}>立即更新</button>:!checking&&(requestError||status.phase==='error')?<button className="update-dialog-primary" onClick={()=>void checkUpdates()}>重新检查</button>:null}</footer>
+    <footer>{(requestError||status.phase==='error')&&<a href="https://github.com/Acerocloud/qusu-editor/releases/latest" target="_blank" rel="noopener noreferrer">手动下载安装</a>}<button onClick={()=>setModal(false)}>{!checking&&status.phase==='available'?'暂不更新':'关闭'}</button>{!checking&&status.phase==='available'&&!requestError?<button className="update-dialog-primary" onClick={()=>void install()}>立即更新</button>:!checking&&(requestError||status.phase==='error')?<button className="update-dialog-primary" onClick={()=>void checkUpdates()}>重新检查</button>:null}</footer>
   </dialog>,document.body)}</>;
 }

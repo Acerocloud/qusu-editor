@@ -46,9 +46,16 @@ async function scenario(rollback){
   const status=async()=>fetch(url+'.qusu-update').then(r=>r.json()).catch(()=>({}));
   const health=async()=>fetch(url+'.qusu-launcher').then(r=>r.json()).catch(()=>({}));
   async function stopOwned(){
-    const info=await health();if(info.id!=='com.qusu.editor')return;
-    const lines=(await readFile(path.join(userData,'native-instances.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));const current=lines.at(-1);
-    if(!current||current.version!==info.version)throw new Error('Refusing to stop a process outside this updater test.');
+    if((await health()).id!=='com.qusu.editor')return;
+    let current;
+    await expect.poll(async()=>{
+      const info=await health();
+      if(info.id!=='com.qusu.editor')return true;
+      const lines=(await readFile(path.join(userData,'native-instances.jsonl'),'utf8').catch(()=>'')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
+      current=lines.find(record=>record.pid===info.pid&&record.version===info.version);
+      return info.ready&&!!current;
+    },{timeout:20000}).toBe(true);
+    if(!current)return;
     try{process.kill(current.pid);}catch(error){if(error.code!=='ESRCH')throw error;}
     await expect.poll(async()=>(await health()).id,{timeout:10000}).not.toBe('com.qusu.editor');
   }

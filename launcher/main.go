@@ -53,7 +53,7 @@ func handler(assets fs.FS, address string, updates ...*updater) http.Handler {
 		if r.URL.Path == "/.qusu-launcher" {
 			w.Header().Set("Content-Type", "application/json")
 			if r.Method != http.MethodHead {
-				json.NewEncoder(w).Encode(map[string]any{"id": appID, "version": version, "ready": nativeReady.Load()})
+				json.NewEncoder(w).Encode(map[string]any{"id": appID, "version": version, "ready": nativeReady.Load(), "pid": os.Getpid()})
 			}
 			return
 		}

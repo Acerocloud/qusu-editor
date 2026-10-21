@@ -161,7 +161,7 @@ func main() {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		if existingLauncher(url) {
-			openEditor(url + "?checkUpdate=1")
+			openEditor(url + "?checkUpdate=auto")
 			return
 		}
 		message := fmt.Sprintf("本地端口 %d 已被占用。请先从托盘退出旧版 QUSU Editor 或关闭占用程序，再重新启动。", port)
@@ -184,12 +184,12 @@ func main() {
 		systray.AddMenuItem(url, "本机编辑地址").Disable()
 		systray.AddSeparator()
 		quit := systray.AddMenuItem("退出 QUSU Editor", "停止本机服务")
-		systray.SetOnTapped(func() { openEditor(url + "?checkUpdate=1") })
+		systray.SetOnTapped(func() { openEditor(url + "?checkUpdate=auto") })
 		go func() {
 			for {
 				select {
 				case <-open.ClickedCh:
-					openEditor(url + "?checkUpdate=1")
+					openEditor(url + "?checkUpdate=auto")
 				case <-checkUpdate.ClickedCh:
 					openEditor(url + "?checkUpdate=1")
 				case <-quit.ClickedCh:

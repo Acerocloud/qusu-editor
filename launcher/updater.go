@@ -247,6 +247,7 @@ func (u *updater) checkRelease(manual, startup bool) {
 	}
 	u.busy = true
 	failed := u.failedVersion
+	failedMessage := u.status.Error
 	if manual {
 		u.failedVersion = ""
 	}
@@ -285,7 +286,10 @@ func (u *updater) checkRelease(manual, startup bool) {
 		return
 	}
 	if !manual && failed == latest {
-		u.fail(errors.New("上次更新未完成，当前版本仍可使用。可点击检查更新重试"))
+		if failedMessage == "" {
+			failedMessage = "上次更新未完成，当前版本仍可使用。可点击检查更新重试"
+		}
+		u.fail(errors.New(failedMessage))
 		return
 	}
 	base := u.downloadBase + "v" + latest + "/"
@@ -446,6 +450,8 @@ func (u *updater) api(w http.ResponseWriter, r *http.Request) {
 	case "/.qusu-update/startup":
 		// Reuse the native startup check if it already began, including errors.
 		u.startupCheck()
+	case "/.qusu-update/auto":
+		u.check(false)
 	case "/.qusu-update/install":
 		if !u.install() {
 			http.Error(w, "Check for an available update first", 409)

@@ -87,7 +87,7 @@ try {
   const second = start();
   expect(await second.exited).toBe(0);
   await expect.poll(async () => (await records('opened-urls.txt')).length).toBe(openedCount + 1);
-  expect((await records('opened-urls.txt')).at(-1)).toBe(url+'?checkUpdate=1');
+  expect((await records('opened-urls.txt')).at(-1)).toBe(url+'?checkUpdate=auto');
   expect(desktop.child.exitCode).toBeNull();
   browser = await chromium.launchPersistentContext(path.join(userData, 'browser'), { headless: true });
   page = await browser.newPage();

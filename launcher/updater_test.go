@@ -26,6 +26,25 @@ type updateRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f updateRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+func TestStartupCheckPreservesRollbackReason(t *testing.T) {
+	trustFixture(t)
+	t.Setenv("QUSU_TEST_USER_DATA", t.TempDir())
+	u := newUpdater("127.0.0.1:17863", func() {})
+	u.failedVersion = "1.5.0"
+	u.status.Phase = "error"
+	u.status.Error = "新版启动失败，已自动恢复之前的版本"
+	requests := 0
+	u.client = &http.Client{Transport: updateRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		requests++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"tag_name":"v1.5.0"}`)), Header: make(http.Header)}, nil
+	})}
+	u.startupCheck()
+	u.startupCheck()
+	if requests != 1 || u.snapshot().Error != "新版启动失败，已自动恢复之前的版本" || u.snapshot().Phase != "error" {
+		t.Fatal("automatic startup check lost the rollback cause or retried the failed binary")
+	}
+}
+
 func TestAutomaticChecksEveryThreeHours(t *testing.T) {
 	trustFixture(t)
 	t.Setenv("QUSU_TEST_USER_DATA", t.TempDir())

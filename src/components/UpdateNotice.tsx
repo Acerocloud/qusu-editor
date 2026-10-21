@@ -6,7 +6,7 @@ import { imagesAreLoading } from '../lib/images';
 
 type UpdateStatus={current:string;latest?:string;phase:string;progress:number;token:string;error?:string;postponed:boolean;waiting?:number};
 async function request(path:string,options?:RequestInit){
-  const abort=new AbortController();const timer=setTimeout(()=>abort.abort(),/\/(check|startup)$/.test(path)?70000:4000);
+  const abort=new AbortController();const timer=setTimeout(()=>abort.abort(),/\/(check|startup|auto)$/.test(path)?70000:4000);
   try{const response=await fetch(path,{...options,signal:abort.signal});if(!response.ok)throw new Error('更新服务暂不可用');return await response.json() as UpdateStatus;}
   finally{clearTimeout(timer);}
 }
@@ -14,22 +14,28 @@ export function UpdateNotice(){
   const [status,setStatus]=useState<UpdateStatus>();const [saveError,setSaveError]=useState(false);const [manual,setManual]=useState(false);
   const [modal,setModal]=useState(false);const [checkingRequest,setCheckingRequest]=useState(false);const [requestError,setRequestError]=useState('');
   const dialog=useRef<HTMLDialogElement>(null);const trayChecked=useRef(false);
-  const session=useRef({id:Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''),version:'',prepared:false,failed:false,composing:false,checking:false,disposed:false,status:undefined as UpdateStatus|undefined});
+  const session=useRef({id:Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''),version:'',promptedVersion:'',autoModal:false,prepared:false,failed:false,composing:false,checking:false,disposed:false,status:undefined as UpdateStatus|undefined});
   const post=async(action:string,body:object={})=>{const current=session.current.status;if(!current)throw new Error('更新服务暂不可用');return request(`/.qusu-update/${action}`,{method:'POST',headers:{'Content-Type':'application/json','X-QUSU-Token':current.token},body:JSON.stringify(body)});};
   const checkUpdates=async(action='check')=>{
+    session.current.autoModal=false;
     setModal(true);setManual(true);setRequestError('');setCheckingRequest(true);
     try{const next=await post(action);session.current.status=next;setStatus(next);}
     catch{setRequestError('检查更新失败，请检查网络后重试。');}
     finally{setCheckingRequest(false);}
+  };
+  const automaticCheck=async(action:string)=>{
+    try{const next=await post(action);session.current.status=next;setStatus(next);}
+    catch{/* Automatic checks stay silent; manual checking remains available. */}
   };
   useEffect(()=>{if(modal&&!dialog.current?.open)dialog.current?.showModal();},[modal]);
   useEffect(()=>{
     if(!status||trayChecked.current)return;trayChecked.current=true;
     const url=new URL(window.location.href);
     const trigger=url.searchParams.get('checkUpdate');
-    if(trigger==='1'||trigger==='startup'){
+    if(trigger==='1'||trigger==='startup'||trigger==='auto'){
       url.searchParams.delete('checkUpdate');history.replaceState(null,'',url);
-      void checkUpdates(trigger==='startup'?'startup':'check');
+      if(trigger==='1')void checkUpdates();
+      else void automaticCheck(trigger==='startup'?'startup':'auto');
     }
   },[status]);
   useEffect(()=>{
@@ -41,6 +47,12 @@ export function UpdateNotice(){
       try{
         const next=await request('/.qusu-update');if(!next.current||!next.token||current.disposed)return;
         current.status=next;setStatus(next);if(!current.version)current.version=next.current;
+        if(next.phase==='available'&&next.latest&&next.latest!==next.current&&current.promptedVersion!==next.latest&&!document.querySelector('[role="dialog"]')){
+          current.promptedVersion=next.latest;current.autoModal=true;setRequestError('');setModal(true);
+        }
+        if(current.autoModal&&['downloading','ready','installing'].includes(next.phase)){
+          current.autoModal=false;setModal(false);
+        }
         const restarted=current.version!==next.current;
         const preparing=restarted||next.phase==='ready'&&!next.postponed;
         if(preparing&&!current.prepared&&!current.failed){
@@ -64,7 +76,7 @@ export function UpdateNotice(){
   if(!status)return null;
   const retry=async()=>{session.current.failed=false;setSaveError(false);setManual(true);if(status.phase==='ready')return;await checkUpdates();};
   const install=async()=>{
-    setRequestError('');
+    setRequestError('');setManual(true);
     try{const next=await post('install');session.current.status=next;setStatus(next);setModal(false);session.current.failed=false;setSaveError(false);}
     catch{setRequestError('无法开始更新，请重新检查后重试。');}
   };

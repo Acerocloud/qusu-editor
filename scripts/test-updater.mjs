@@ -68,17 +68,19 @@ async function scenario(rollback){
     await page.goto(url+'?checkUpdate=startup');
     await expect(page.getByRole('button',{name:'检查更新',exact:true})).toBeVisible();
     const updateDialog=page.getByRole('dialog',{name:'软件更新'});
-    await expect(updateDialog).toContainText('已是最新版本');
-    await expect(updateDialog).toContainText(`当前版本：v${originalVersion}`);
-    await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
+    await expect.poll(async()=>(await status()).phase).toBe('current');
+    await expect(updateDialog).not.toBeVisible();
     const startupChecks=feedRequests;
     await sleep(3500);expect(feedRequests).toBe(startupChecks);
     const reopen=launch();
     await expect.poll(()=>reopen.exitCode,{timeout:15000}).toBe(0);
-    expect((await readFile(path.join(userData,'opened-urls.txt'),'utf8')).trim().split('\n').at(-1)).toBe(url+'?checkUpdate=1');
-    await page.goto(url+'?checkUpdate=1');
+    expect((await readFile(path.join(userData,'opened-urls.txt'),'utf8')).trim().split('\n').at(-1)).toBe(url+'?checkUpdate=auto');
+    await page.goto(url+'?checkUpdate=auto');
+    await expect.poll(()=>feedRequests).toBe(startupChecks+1);
+    await expect(updateDialog).not.toBeVisible();
+    await page.getByRole('button',{name:'检查更新',exact:true}).click();
     await expect(updateDialog).toContainText('已是最新版本');
-    expect(feedRequests).toBe(startupChecks+1);
+    expect(feedRequests).toBe(startupChecks+2);
     await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
     mode='offline';await page.getByRole('button',{name:'检查更新',exact:true}).click();
     await expect(updateDialog).toContainText('503');
@@ -138,7 +140,9 @@ async function scenario(rollback){
       await articlePage.getByLabel('软件自动更新').getByRole('button',{name:'重试',exact:true}).click();
     }
     if(rollback){
-      await expect.poll(async()=>(await status()).error||'',{timeout:60000}).toContain('新版启动失败');
+      // Include the save grace period, helper handoff, new-startup probe and
+      // restoration; cold launches and OS executable scanning can add latency.
+      await expect.poll(async()=>(await status()).error||'',{timeout:120000}).toContain('新版启动失败');
       const before=payloadRequests;
       expect((await health()).version).toBe(originalVersion);
       await expect(page.getByLabel('文章主标题',{exact:true})).toHaveValue('回退后仍在的内容');
@@ -157,6 +161,7 @@ async function scenario(rollback){
       await expect.poll(async()=>(await health()).version,{timeout:15000}).toBe(target);
       console.log('Automatic upgrade passed: signature and hash rejection, multi-tab save failure protection, independent template draft, article, local image, automatic reload and cold launch through the original shortcut.');
     }
-  }finally{if(browser)await browser.close();await stopOwned();if(initial.exitCode===null)initial.kill();}
+  }catch(error){const state=await status();console.error('Updater scenario failed:',rollback?'rollback':'success',{current:state.current,latest:state.latest,phase:state.phase,error:state.error,checkedAt:state.checkedAt});throw error;}
+  finally{if(browser)await browser.close();await stopOwned();if(initial.exitCode===null)initial.kill();}
 }
-try{await scenario(false);await scenario(true);}finally{await new Promise(resolve=>feed.close(resolve));}
+try{if(process.env.QUSU_TEST_UPDATE_CASE!=='rollback')await scenario(false);if(process.env.QUSU_TEST_UPDATE_CASE!=='success')await scenario(true);}finally{await new Promise(resolve=>feed.close(resolve));}

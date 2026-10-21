@@ -47,7 +47,7 @@ export const serializers: Serializers = {
     const c=b.content;
     const slides=c.images.map((asset,index)=>{
       const src=safeURL(asset.src,true,p);
-      const picture=src&&(!asset.local||p)?`<a href="${e(src)}" target="_blank" rel="noopener noreferrer" title="点击查看完整原图" style="position:absolute;top:0;left:0;display:block;width:100%;height:100%;"><img src="${e(src)}" alt="${e(asset.caption||`相册图片 ${index+1}`)}" style="${inlineCSS(galleryImage())}"/></a>`:`<section style="position:absolute;top:0;left:0;width:100%;height:100%;box-sizing:border-box;border:1px dashed #D8DEE7;padding:38px 15px;text-align:center;font-size:12px;color:#78828E;">${asset.local?`本地图片 ${index+1} 占位 · 请先上传公众号，再填回素材图片 URL`:`图片 ${index+1} · 请上传或填写图片地址`}</section>`;
+      const picture=src&&(!asset.local||p)?`<a href="${e(src)}" target="_blank" rel="noopener noreferrer" title="点击查看完整原图" style="display:block;width:100%;"><img src="${e(src)}" alt="${e(asset.caption||`相册图片 ${index+1}`)}" style="${inlineCSS(galleryImage())}"/></a>`:`<section style="width:100%;min-height:160px;box-sizing:border-box;border:1px dashed #D8DEE7;padding:38px 15px;text-align:center;font-size:12px;color:#78828E;">${asset.local?`本地图片 ${index+1} 占位 · 请先上传公众号，再填回素材图片 URL`:`图片 ${index+1} · 请上传或填写图片地址`}</section>`;
       return `<section style="${inlineCSS(gallerySlide(index===c.images.length-1))}"><section style="${inlineCSS(galleryFrame())}">${picture}</section>${caption(asset.caption)}</section>`;
     }).join('');
     return `<section style="${inlineCSS(horizontalViewport())}">${slides}</section>${c.showHint?caption(`← 左右滑动预览，点击查看完整原图（${c.images.length} 张） →`):''}${caption(c.caption)}`;

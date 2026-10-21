@@ -9,8 +9,10 @@ export const galleryWidth = 92;
 export const galleryGap = 12;
 export function horizontalViewport(): CSSProperties { return { width: '100%', overflowX: 'auto', overflowY: 'hidden', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }; }
 export function gallerySlide(last = false): CSSProperties { return { display: 'inline-block', verticalAlign: 'top', width: `${galleryWidth}%`, marginRight: `${last ? 0 : galleryGap}px`, whiteSpace: 'normal', scrollSnapAlign: 'start' }; }
-export function galleryFrame(): CSSProperties { return { position: 'relative', width: '100%', height: 0, paddingBottom: '100%', overflow: 'hidden', backgroundColor: '#F4F6F9' }; }
-export function galleryImage(): CSSProperties { return { position: 'absolute', top: 0, left: 0, display: 'block', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }; }
+// Normal-flow images let the horizontal viewport grow to the tallest slide,
+// including after images load or the article width changes, without stored dimensions.
+export function galleryFrame(): CSSProperties { return { position: 'relative', width: '100%', overflow: 'hidden', backgroundColor: '#F4F6F9' }; }
+export function galleryImage(): CSSProperties { return { display: 'block', width: '100%', height: 'auto' }; }
 export function inlineCSS(styles: CSSProperties): string { return Object.entries(styles).map(([key,value])=>`${key.replace(/[A-Z]/g,c=>`-${c.toLowerCase()}`)}:${value};`).join(''); }
 export function blockImages(block: Block): Pick<ImageAsset,'src'|'caption'|'local'>[] {
   if(block.type==='imageGallery') return block.content.images;

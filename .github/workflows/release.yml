@@ -44,6 +44,8 @@ jobs:
       - run: pnpm exec playwright install chromium
       - run: pnpm test
       - run: pnpm build
+      - name: Verify responsive gallery height and exported layout
+        run: node scripts/test-gallery-layout.mjs
       - name: Build native browser launchers and installers
         run: node scripts/build-launcher.mjs --arch ${{ matrix.build_arches }} --package
       - name: Test native server boundaries

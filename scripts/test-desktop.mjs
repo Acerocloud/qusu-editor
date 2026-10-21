@@ -48,7 +48,7 @@ try {
     await expect.poll(async () => fetch(url).then(r => r.status).catch(() => 0), { timeout: 15000 }).toBe(200);
   } else {
     desktop = await launch();
-    await expect.poll(() => records('opened-urls.txt')).toEqual([url]);
+    await expect.poll(() => records('opened-urls.txt')).toEqual([url+'?checkUpdate=startup']);
   }
   browser = await chromium.launchPersistentContext(path.join(userData, 'browser'), { headless: true, permissions: ['clipboard-read', 'clipboard-write'] });
   let page = await browser.newPage();
@@ -87,6 +87,7 @@ try {
   const second = start();
   expect(await second.exited).toBe(0);
   await expect.poll(async () => (await records('opened-urls.txt')).length).toBe(openedCount + 1);
+  expect((await records('opened-urls.txt')).at(-1)).toBe(url+'?checkUpdate=1');
   expect(desktop.child.exitCode).toBeNull();
   browser = await chromium.launchPersistentContext(path.join(userData, 'browser'), { headless: true });
   page = await browser.newPage();

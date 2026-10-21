@@ -6,6 +6,17 @@ import { serializeArticle,serializeBlock,fullHTML,localImages,plainText } from '
 import { sanitizeRich,safeURL } from './sanitize';
 import { useEditorStore } from '../store/editor';
 describe('WeChat serializer',()=>{
+  it('omits legacy section numbers from headings and preserves old project data',()=>{
+    const heading=createBlock('sectionHeading');heading.content.number='07';heading.content.title='只有标题文字';
+    const article={...newArticle(),blocks:[heading]};
+    const restored=parseProject(JSON.stringify(article));
+    expect(restored.blocks[0]).toEqual(heading);
+    for(const preview of [false,true]){
+      const doc=new DOMParser().parseFromString(serializeBlock(heading,preview),'text/html');
+      expect(doc.body.textContent).toBe('只有标题文字');
+    }
+    expect(createBlock('sectionHeading').content.number).toBe('');
+  });
   it('exports every registered block without editor UI or incompatible layout',()=>{const a=newArticle();expect(a.blocks.length).toBe(blockTypes.length);const html=serializeArticle(a);expect(html).not.toMatch(/class=|contenteditable|data-block|<script|<iframe|display:flex|display:grid|var\(|blob:|拖动模块/);const doc=new DOMParser().parseFromString(html,'text/html');expect(doc.querySelectorAll('table').length).toBe(2);expect(html).toContain('阅读记录');expect(doc.querySelector('section')?.getAttribute('style')).toContain('margin:0;padding:0;border:0');});
   it('escapes structured fields and restricts rich text',()=>{const b=createBlock('articleTitle');b.content.title='<img src=x onerror=alert(1)> & "';const html=serializeBlock(b);expect(html).toContain('&lt;img');expect(new DOMParser().parseFromString(html,'text/html').querySelector('img')).toBeNull();const p=createBlock('paragraph');p.content.html='<script>alert(1)</script><p onclick="x()">ok<a href="javascript:alert(1)">link</a></p>';const rich=serializeBlock(p);expect(rich).not.toMatch(/script|onclick|javascript:/);expect(rich).toContain('style="margin:0');});
   it('omits local resources in publication and keeps image previews',()=>{const a=newArticle();const b=createBlock('image');b.content.src='data:image/png;base64,AAAA';b.content.local=true;a.blocks=[b];expect(localImages(a)).toHaveLength(1);expect(serializeArticle(a)).not.toContain('<img');expect(serializeArticle(a,true)).toContain('<img');b.content.src='blob:https://example.test/a';expect(serializeArticle(a,true)).not.toContain('blob:');});

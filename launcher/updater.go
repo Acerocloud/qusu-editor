@@ -232,8 +232,16 @@ func (u *updater) get(target string, limit int64) ([]byte, error) {
 	return data, nil
 }
 func (u *updater) check(manual bool) {
+	u.checkRelease(manual, false)
+}
+
+func (u *updater) startupCheck() {
+	u.checkRelease(false, true)
+}
+
+func (u *updater) checkRelease(manual, startup bool) {
 	u.mu.Lock()
-	if u.busy || u.status.Phase == "ready" || u.status.Phase == "installing" {
+	if u.busy || u.status.Phase == "ready" || u.status.Phase == "installing" || startup && u.status.CheckedAt != "" {
 		u.mu.Unlock()
 		return
 	}
@@ -244,6 +252,7 @@ func (u *updater) check(manual bool) {
 	}
 	u.status.Phase = "checking"
 	u.status.Error = ""
+	u.status.CheckedAt = time.Now().UTC().Format(time.RFC3339)
 	u.mu.Unlock()
 	defer func() { u.mu.Lock(); u.busy = false; u.mu.Unlock() }()
 	data, err := u.get(u.feed, 1024*1024)
@@ -434,6 +443,9 @@ func (u *updater) api(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/.qusu-update/check":
 		u.check(true)
+	case "/.qusu-update/startup":
+		// Reuse the native startup check if it already began, including errors.
+		u.startupCheck()
 	case "/.qusu-update/install":
 		if !u.install() {
 			http.Error(w, "Check for an available update first", 409)
@@ -499,21 +511,32 @@ func (u *updater) canInstall(now time.Time) bool {
 	}
 	return true
 }
-func (u *updater) run() {
-	go func() {
-		time.Sleep(3 * time.Second)
-		// A manual check during startup already supplies the result. Do not
-		// overwrite its download/error state with a second automatic check.
-		if u.snapshot().CheckedAt == "" {
-			u.check(false)
-		}
-		ticker := time.NewTicker(6 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
+func (u *updater) runChecks(ctx context.Context) {
+	startup := time.NewTimer(3 * time.Second)
+	defer startup.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-startup.C:
+	}
+	// Reuse the check triggered by the opening browser, even if it failed.
+	// This also prevents startup from racing a manual download.
+	u.startupCheck()
+	ticker := time.NewTicker(3 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 			u.check(false)
 			cleanupUpdates(u.root)
 		}
-	}()
+	}
+}
+
+func (u *updater) run() {
+	go u.runChecks(context.Background())
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()

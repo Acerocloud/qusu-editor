@@ -19,7 +19,7 @@ export const renderers:Renderers={
   articleTitle:({b})=><><Field b={b} field="title" label="文章主标题" multi/><div style={{marginTop:12,fontSize:14,color:'#626B77',fontWeight:400,lineHeight:1.75}}><Field b={b} field="subtitle" label="文章副标题" multi/></div></>,
   authorInfo:({b})=><div><Field b={b} field="author" label="作者"/></div>,
   abstract:LabeledRich,
-  sectionHeading:({b})=><div className="heading-fields"><span style={{width:32,flexShrink:0}}><Field b={b} field="number" label="章节编号"/></span><span>/</span><Field b={b} field="title" label="章节标题" multi/></div>,
+  sectionHeading:({b})=><Field b={b} field="title" label="章节标题" multi/>,
   subsectionHeading:({b})=><Field b={b} field="title" label="小节标题" multi/>,
   categoryLabel:({b})=><Field b={b} field="text" label="分类标签"/>,
   keyQuote:Rich,

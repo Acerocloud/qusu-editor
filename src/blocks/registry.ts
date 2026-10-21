@@ -9,7 +9,7 @@ export const registry: Registry = {
   articleTitle: { name: '文章主标题', group: '文章信息', hint: '主标题与副标题', content: { title: '把想法写成一篇好文章', subtitle: '从一个观察开始，整理信息，表达清楚你的观点。' }, styles: { fontSize: 25, color: tokens.navy, fontWeight: 700, lineHeight: 1.45 } },
   authorInfo: { name: '作者信息', group: '文章信息', hint: '单行作者小字', content: { author: 'QUSU 曲速研究', reading: '' }, styles: { fontSize: 12, color: tokens.muted } },
   abstract: { name: '摘要', group: '正文内容', hint: 'ABSTRACT', content: { heading: '摘要 / ABSTRACT', html: '<p>这是一篇通用排版示例。你可以直接修改文字，插入图片，调整模块顺序，再保存成自己的文章或模板。</p>' }, styles: { background: tokens.gray, paddingTop: 15, paddingBottom: 15, paddingLeft: 15, paddingRight: 15, lineHeight: 1.75 } },
-  sectionHeading: { name: '一级标题', group: '标题', hint: '编号章节标题', content: { number: '01', title: '从一个观察开始' }, styles: { fontSize: 21, fontWeight: 700, color: tokens.navy, paddingLeft: 15, marginTop: 34 } },
+  sectionHeading: { name: '一级标题', group: '标题', hint: '章节标题', content: { number: '', title: '从一个观察开始' }, styles: { fontSize: 21, fontWeight: 700, color: tokens.navy, paddingLeft: 15, marginTop: 34 } },
   subsectionHeading: { name: '二级标题', group: '标题', hint: '小节标题', content: { title: '把信息整理成清晰的结构' }, styles: { fontSize: 17, fontWeight: 700, color: tokens.navy, paddingBottom: 9 } },
   categoryLabel: { name: '分类标签', group: '标题', hint: '中英文栏目标签', content: { text: 'NOTES & IDEAS / 阅读笔记' }, styles: { fontSize: 12, fontWeight: 700, color: tokens.navy } },
   keyQuote: { name: '关键观点引用', group: '研究分析', hint: '突出核心判断', content: { html: '<p>可信度不来自更响亮的承诺，而来自把事实、假设与尚未解决的问题分开表达。</p>' }, styles: { fontSize: 15, fontWeight: 600, paddingLeft: 15, accent: tokens.navy } },

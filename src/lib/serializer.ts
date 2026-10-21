@@ -23,7 +23,7 @@ export const serializers: Serializers = {
   articleTitle: b => `<p style="margin:0 0 12px;">${e(b.content.title)}</p><p style="margin:0;font-size:14px;color:#626B77;font-weight:400;line-height:1.75;">${e(b.content.subtitle)}</p>`,
   authorInfo: b => `<p style="margin:0;font-size:inherit;color:inherit;">${e(b.content.author)}</p>`,
   abstract: b => heading(b.content.heading) + inlineRich(b.content.html),
-  sectionHeading: b => `${e(b.content.number)} / ${e(b.content.title)}`,
+  sectionHeading: b => e(b.content.title),
   subsectionHeading: b => e(b.content.title),
   categoryLabel: b => e(b.content.text),
   keyQuote: b => inlineRich(b.content.html),

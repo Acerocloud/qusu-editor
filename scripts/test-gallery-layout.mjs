@@ -11,6 +11,9 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.goto(origin);
   await expect(page.locator('[data-block-id]')).toHaveCount(22);
+  await expect(page.getByLabel('章节编号',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('章节标题',{exact:true})).toHaveValue('从一个观察开始');
+  expect(await page.locator('[data-block-type=sectionHeading]').innerText()).not.toContain(' / ');
   await page.evaluate(async () => {
     const { createBlock } = await import('/src/blocks/registry.ts');
     const { newArticle } = await import('/src/lib/project.ts');

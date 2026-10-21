@@ -3,12 +3,14 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,8 +18,70 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"testing/synctest"
 	"time"
 )
+
+type updateRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f updateRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestAutomaticChecksEveryThreeHours(t *testing.T) {
+	trustFixture(t)
+	t.Setenv("QUSU_TEST_USER_DATA", t.TempDir())
+	for _, scenario := range []string{"fresh", "already-checked", "offline"} {
+		t.Run(scenario, func(t *testing.T) {
+			u := newUpdater("127.0.0.1:17863", func() {})
+			if scenario == "already-checked" {
+				u.status.CheckedAt = "startup already checked"
+			}
+			synctest.Test(t, func(t *testing.T) {
+				requests := 0
+				u.client = &http.Client{Transport: updateRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+					requests++
+					code := http.StatusOK
+					if scenario == "offline" && requests == 1 {
+						code = http.StatusServiceUnavailable
+					}
+					return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(`{"tag_name":"v1.4.0"}`)), Header: make(http.Header)}, nil
+				})}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go u.runChecks(ctx)
+				synctest.Wait()
+				time.Sleep(3 * time.Second)
+				synctest.Wait()
+				initial := 1
+				if scenario == "already-checked" {
+					initial = 0
+				}
+				if requests != initial {
+					t.Fatalf("startup requests = %d, want %d", requests, initial)
+				}
+				if scenario == "offline" && u.snapshot().Phase != "error" {
+					t.Fatal("startup failure missing")
+				}
+				time.Sleep(3*time.Hour - time.Second)
+				synctest.Wait()
+				if requests != initial {
+					t.Fatal("periodic check ran before three hours")
+				}
+				time.Sleep(time.Second)
+				synctest.Wait()
+				if requests != initial+1 || u.snapshot().Phase != "current" {
+					t.Fatal("three-hour check did not run or recover")
+				}
+				time.Sleep(3 * time.Hour)
+				synctest.Wait()
+				if requests != initial+2 {
+					t.Fatal("periodic checks did not repeat")
+				}
+				cancel()
+				synctest.Wait()
+			})
+		})
+	}
+}
 
 func trustFixture(t *testing.T) ed25519.PrivateKey {
 	t.Helper()
@@ -43,6 +107,51 @@ func TestUpdateVersions(t *testing.T) {
 		if newerVersion(test.next, test.current) != test.want {
 			t.Errorf("%+v", test)
 		}
+	}
+}
+
+func TestStartupCheckOncePerProcess(t *testing.T) {
+	trustFixture(t)
+	requests := 0
+	offline := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if offline {
+			http.Error(w, "offline", 503)
+			return
+		}
+		w.Write([]byte(`{"tag_name":"v1.4.0"}`))
+	}))
+	defer server.Close()
+	t.Setenv("QUSU_TEST_USER_DATA", t.TempDir())
+	t.Setenv("QUSU_TEST_UPDATE_FEED", server.URL+"/latest")
+	u := newUpdater("127.0.0.1:17863", func() {})
+	call := func(action string) {
+		r := httptest.NewRequest("POST", "/.qusu-update/"+action, strings.NewReader(`{}`))
+		r.Header.Set("Origin", "http://"+u.address)
+		r.Header.Set("X-QUSU-Token", u.snapshot().Token)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		u.api(w, r)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	call("startup")
+	call("startup")
+	if requests != 1 || u.snapshot().Phase != "current" {
+		t.Fatal("startup was repeated or result missing")
+	}
+	call("check")
+	if requests != 2 {
+		t.Fatal("opening the running editor must check again")
+	}
+	offline = true
+	u = newUpdater(u.address, func() {})
+	call("startup")
+	call("startup")
+	if requests != 3 || u.snapshot().Phase != "error" || u.snapshot().CheckedAt == "" {
+		t.Fatal("failed startup check must not silently repeat")
 	}
 }
 func TestSignedManifest(t *testing.T) {

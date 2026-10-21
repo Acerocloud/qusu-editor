@@ -19,9 +19,9 @@ const publicKey=keys.publicKey.export({type:'spki',format:'der'}).subarray(-32).
 const manifest=Buffer.from(JSON.stringify({version:target,assets:{[platform]:fragment.asset}}));
 const signature=sign(null,manifest,keys.privateKey).toString('base64');
 const originalVersion='1.3.99';
-let mode='current';let payloadRequests=0;
+let mode='current';let payloadRequests=0;let feedRequests=0;
 const feed=http.createServer((request,response)=>{
-  if(request.url==='/latest'){if(mode==='offline'){response.writeHead(503);response.end();return;}response.setHeader('Content-Type','application/json');response.end(JSON.stringify({tag_name:`v${mode==='current'?originalVersion:target}`}));}
+  if(request.url==='/latest'){feedRequests++;if(mode==='offline'){response.writeHead(503);response.end();return;}response.setHeader('Content-Type','application/json');response.end(JSON.stringify({tag_name:`v${mode==='current'?originalVersion:target}`}));}
   else if(request.url.endsWith('/update-manifest.json'))response.end(manifest);
   else if(request.url.endsWith('/update-manifest.sig'))response.end(mode==='bad-signature'?'invalid':signature);
   else if(request.url.endsWith('/'+name)){payloadRequests++;if(mode==='bad-hash'){const corrupt=Buffer.from(payload);corrupt[corrupt.length-1]^=1;response.end(corrupt);}else response.end(payload);}
@@ -63,11 +63,22 @@ async function scenario(rollback){
   try{
     await expect.poll(async()=>(await health()).version,{timeout:15000}).toBe(originalVersion);
     browser=await chromium.launchPersistentContext(path.join(userData,'browser'),{headless:true});
-    const page=await browser.newPage();await page.goto(url+'?checkUpdate=1');
+    const page=await browser.newPage();
+    await expect.poll(async()=>(await readFile(path.join(userData,'opened-urls.txt'),'utf8').catch(()=>''))).toContain('?checkUpdate=startup');
+    await page.goto(url+'?checkUpdate=startup');
     await expect(page.getByRole('button',{name:'检查更新',exact:true})).toBeVisible();
     const updateDialog=page.getByRole('dialog',{name:'软件更新'});
     await expect(updateDialog).toContainText('已是最新版本');
     await expect(updateDialog).toContainText(`当前版本：v${originalVersion}`);
+    await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
+    const startupChecks=feedRequests;
+    await sleep(3500);expect(feedRequests).toBe(startupChecks);
+    const reopen=launch();
+    await expect.poll(()=>reopen.exitCode,{timeout:15000}).toBe(0);
+    expect((await readFile(path.join(userData,'opened-urls.txt'),'utf8')).trim().split('\n').at(-1)).toBe(url+'?checkUpdate=1');
+    await page.goto(url+'?checkUpdate=1');
+    await expect(updateDialog).toContainText('已是最新版本');
+    expect(feedRequests).toBe(startupChecks+1);
     await updateDialog.getByRole('button',{name:'关闭',exact:true}).click();
     mode='offline';await page.getByRole('button',{name:'检查更新',exact:true}).click();
     await expect(updateDialog).toContainText('503');

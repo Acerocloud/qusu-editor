@@ -6,7 +6,7 @@ import { imagesAreLoading } from '../lib/images';
 
 type UpdateStatus={current:string;latest?:string;phase:string;progress:number;token:string;error?:string;postponed:boolean;waiting?:number};
 async function request(path:string,options?:RequestInit){
-  const abort=new AbortController();const timer=setTimeout(()=>abort.abort(),path.endsWith('/check')?70000:4000);
+  const abort=new AbortController();const timer=setTimeout(()=>abort.abort(),/\/(check|startup)$/.test(path)?70000:4000);
   try{const response=await fetch(path,{...options,signal:abort.signal});if(!response.ok)throw new Error('更新服务暂不可用');return await response.json() as UpdateStatus;}
   finally{clearTimeout(timer);}
 }
@@ -16,9 +16,9 @@ export function UpdateNotice(){
   const dialog=useRef<HTMLDialogElement>(null);const trayChecked=useRef(false);
   const session=useRef({id:Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''),version:'',prepared:false,failed:false,composing:false,checking:false,disposed:false,status:undefined as UpdateStatus|undefined});
   const post=async(action:string,body:object={})=>{const current=session.current.status;if(!current)throw new Error('更新服务暂不可用');return request(`/.qusu-update/${action}`,{method:'POST',headers:{'Content-Type':'application/json','X-QUSU-Token':current.token},body:JSON.stringify(body)});};
-  const checkUpdates=async()=>{
+  const checkUpdates=async(action='check')=>{
     setModal(true);setManual(true);setRequestError('');setCheckingRequest(true);
-    try{const next=await post('check');session.current.status=next;setStatus(next);}
+    try{const next=await post(action);session.current.status=next;setStatus(next);}
     catch{setRequestError('检查更新失败，请检查网络后重试。');}
     finally{setCheckingRequest(false);}
   };
@@ -26,9 +26,10 @@ export function UpdateNotice(){
   useEffect(()=>{
     if(!status||trayChecked.current)return;trayChecked.current=true;
     const url=new URL(window.location.href);
-    if(url.searchParams.get('checkUpdate')==='1'){
+    const trigger=url.searchParams.get('checkUpdate');
+    if(trigger==='1'||trigger==='startup'){
       url.searchParams.delete('checkUpdate');history.replaceState(null,'',url);
-      void checkUpdates();
+      void checkUpdates(trigger==='startup'?'startup':'check');
     }
   },[status]);
   useEffect(()=>{

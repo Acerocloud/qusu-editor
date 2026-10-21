@@ -29,6 +29,15 @@ try {
   await page.getByRole('button', { name: '检查更新', exact: true }).click();
   await expect(dialog).toContainText('已是最新版本');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  // A manually found release must not immediately reopen after dismissal,
+  // even when the next background poll has not seen it yet.
+  state = { ...state, latest: '1.4.40', phase: 'current' };
+  await page.getByRole('button', { name: '检查更新', exact: true }).click();
+  await expect(dialog).toContainText('最新版本：v1.4.40');
+  await dialog.getByRole('button', { name: '暂不更新', exact: true }).click();
+  const manualReads = reads;
+  await expect.poll(() => reads).toBeGreaterThan(manualReads + 1);
+  await expect(dialog).not.toBeVisible();
   // A background check finds a new version; only this result opens a prompt.
   state = { ...state, latest: '1.4.5', phase: 'available' };
   await expect(dialog).toContainText('最新版本：v1.4.5');
